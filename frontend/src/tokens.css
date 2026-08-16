@@ -1,0 +1,51 @@
+/* Fleet Dashboard — Design System Tokens
+   No magic hex values in components. Use these tokens only. */
+
+:root {
+  /* ---- Colour: surfaces ---- */
+  --bg-0: #0b0f1a;          /* page background (near-black navy) */
+  --bg-1: #111726;          /* panel/card surface */
+  --bg-2: #1a2233;          /* hover/raised surface */
+
+  /* ---- Colour: borders ---- */
+  --border: rgba(255, 255, 255, 0.09);  /* subtle 1px border */
+
+  /* ---- Colour: text ---- */
+  --text-1: #e8ecf4;        /* primary */
+  --text-2: #aab3c5;        /* secondary (AA on --bg-1) */
+  --text-3: #7c8698;        /* muted labels (AA on --bg-1) */
+
+  /* ---- Colour: accent (ONE brand accent — CTA + focus only) ---- */
+  --accent: #f0b429;
+  --accent-ink: #1a1406;    /* text on accent */
+
+  /* ---- Colour: semantic status (state, never device type) ---- */
+  --ok: #3fb950;
+  --warn: #f0b429;
+  --danger: #f85149;
+  --offline: #6b7280;
+
+  /* ---- Spacing scale (4px base) ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* ---- Type scale ---- */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --type-display: 40px/1.1;
+  --type-h2: 20px/1.3;
+  --type-body: 14px/1.5;
+  --type-stat-value: 24px/1.1;
+  --type-label: 11px/1.2;
+
+  /* ---- Radius ---- */
+  --radius-card: 12px;
+  --radius-badge: 999px;
+  --radius-btn: 8px;
+}

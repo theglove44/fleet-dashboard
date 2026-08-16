@@ -1,0 +1,16 @@
+nodes:
+  - name: node-01
+    host: node-01.tailnet-name.ts.net
+    user: christof21
+    os: ubuntu
+    group: host
+  - name: vm-01
+    host: vm-01.tailnet-name.ts.net
+    user: christof21
+    os: ubuntu
+    group: vm
+  - name: mac-pro
+    host: mac-pro.tailnet-name.ts.net
+    user: christof21
+    os: macos
+    group: host
