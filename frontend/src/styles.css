@@ -223,19 +223,23 @@ body {
   background: rgba(4, 6, 10, 0.7);
   backdrop-filter: blur(2px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 100;
   padding: var(--sp-4);
+  overflow-y: auto;
 }
 .modal {
   background: var(--bg-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   width: 100%;
-  max-width: 480px;
+  max-width: 760px;
+  max-height: calc(100vh - var(--sp-8));
   padding: var(--sp-5);
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  overflow-y: auto;
+  margin: auto 0;
 }
 .modal-head {
   display: flex;
@@ -333,7 +337,7 @@ body {
   margin-left: auto;
 }
 .ssh-terminal-body {
-  height: 320px;
+  height: 400px;
   padding: var(--sp-2);
 }
 .ssh-terminal-body .xterm { height: 100%; }
