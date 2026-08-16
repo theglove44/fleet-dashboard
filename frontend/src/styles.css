@@ -302,6 +302,42 @@ body {
   justify-content: flex-end;
 }
 
+/* ---- SSH terminal ---- */
+.ssh-terminal {
+  margin-top: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--bg-0);
+}
+.ssh-terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+}
+.ssh-dot { width: 8px; height: 8px; border-radius: 50%; }
+.ssh-dot.ok { background: var(--ok); }
+.ssh-dot.offline { background: var(--offline); }
+.ssh-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+.ssh-error {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--danger);
+  margin-left: auto;
+}
+.ssh-terminal-body {
+  height: 320px;
+  padding: var(--sp-2);
+}
+.ssh-terminal-body .xterm { height: 100%; }
+
 /* ---- Responsive ---- */
 @media (max-width: 640px) {
   .content { padding: var(--sp-4) var(--sp-4) var(--sp-7); }

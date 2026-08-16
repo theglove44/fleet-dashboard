@@ -3,28 +3,49 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 import yaml
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .collector import SSHCollector
+from .terminal import register_terminal_routes
 
 app = FastAPI(title="Fleet Dashboard", version="0.1.0")
 
-# Allow the frontend dev server to call the API
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Register WebSocket SSH terminal route (defined in terminal.py to avoid
+# a 403 handshake rejection that occurs when defined directly in main.py)
+register_terminal_routes(app)
 
-# In-memory cache of the last collected facts per node
-_cache: dict[str, dict[str, Any]] = {}
+# ---- Persistent cache (survives restarts) ----
+CACHE_FILE = Path(__file__).resolve().parent.parent / "cache.json"
+
+
+def _load_cache() -> dict[str, dict[str, Any]]:
+    """Load the cache from disk."""
+    try:
+        with open(CACHE_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_cache(cache: dict[str, dict[str, Any]]) -> None:
+    """Persist the cache to disk."""
+    try:
+        with open(CACHE_FILE, "w") as f:
+            json.dump(cache, f, indent=2)
+    except OSError:
+        pass
+
+
+# In-memory cache of the last collected facts per node (loaded from disk)
+_cache: dict[str, dict[str, Any]] = _load_cache()
 
 
 class NodeConfig(BaseModel):
@@ -97,6 +118,8 @@ async def collect_all() -> dict[str, Any]:
 
     for result in results:
         _cache[result["name"]] = result
+
+    _save_cache(_cache)
 
     return {"collected": len(results), "nodes": results}
 

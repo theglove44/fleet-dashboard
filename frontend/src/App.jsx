@@ -1,4 +1,6 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
 
 const CONTROLLER = 'mini-ubuntu' // the collector/controller node
 
@@ -132,6 +134,7 @@ function SummaryStrip({ nodes }) {
 function NodeDetail({ node, onClose }) {
   const status = nodeStatus(node)
   const isController = node.name === CONTROLLER
+  const [showTerminal, setShowTerminal] = useState(false)
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -202,12 +205,106 @@ function NodeDetail({ node, onClose }) {
 
         <div className="modal-actions">
           {node.online && (
-            <button className="btn" onClick={() => { /* Pass 4: open SSH */ }}>
-              Open SSH
+            <button className="btn" onClick={() => setShowTerminal((v) => !v)}>
+              {showTerminal ? 'Close SSH' : 'Open SSH'}
             </button>
           )}
         </div>
+
+        {showTerminal && node.online && (
+          <SSHTerminal node={node} />
+        )}
       </div>
+    </div>
+  )
+}
+
+// ---- Interactive SSH terminal (xterm.js + WebSocket) ----
+function SSHTerminal({ node }) {
+  const containerRef = useRef(null)
+  const termRef = useRef(null)
+  const wsRef = useRef(null)
+  const [connected, setConnected] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    const term = new Terminal({
+      cursorBlink: true,
+      fontSize: 13,
+      fontFamily: 'IBM Plex Mono, monospace',
+      theme: {
+        background: '#0b0f1a',
+        foreground: '#e8ecf4',
+        cursor: '#f0b429',
+        selectionBackground: '#1a2233',
+      },
+    })
+    const fit = new FitAddon()
+    term.loadAddon(fit)
+    term.open(containerRef.current)
+    fit.fit()
+    termRef.current = term
+
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const ws = new WebSocket(`${proto}://${window.location.host}/ws/terminal/${node.name}`)
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      setConnected(true)
+      term.focus()
+      // send initial size
+      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+    }
+    ws.onmessage = (ev) => {
+      const msg = JSON.parse(ev.data)
+      if (msg.type === 'output') {
+        term.write(msg.data)
+      } else if (msg.type === 'exit') {
+        setConnected(false)
+        if (msg.error) setError(msg.error)
+        term.write(`\r\n\x1b[31m[connection closed: ${msg.error || 'session ended'}]\x1b[0m\r\n`)
+      }
+    }
+    ws.onerror = () => {
+      setConnected(false)
+      setError('WebSocket error')
+    }
+    ws.onclose = () => {
+      setConnected(false)
+    }
+
+    const onData = (data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'input', data }))
+      }
+    }
+    term.onData(onData)
+
+    const onResize = () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+      }
+    }
+    const ro = new ResizeObserver(onResize)
+    ro.observe(containerRef.current)
+
+    return () => {
+      ro.disconnect()
+      ws.close()
+      term.dispose()
+    }
+  }, [node.name])
+
+  return (
+    <div className="ssh-terminal">
+      <div className="ssh-terminal-bar">
+        <span className={`ssh-dot ${connected ? 'ok' : 'offline'}`} />
+        <span className="ssh-label">{node.user}@{node.host}</span>
+        {error && <span className="ssh-error">{error}</span>}
+      </div>
+      <div className="ssh-terminal-body" ref={containerRef} />
     </div>
   )
 }

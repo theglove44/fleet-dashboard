@@ -3,6 +3,9 @@ backend/.venv/
 __pycache__/
 *.pyc
 
+# Runtime data
+backend/cache.json
+
 # Node
 frontend/node_modules/
 frontend/dist/

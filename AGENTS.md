@@ -91,6 +91,15 @@ This section documents problems encountered and their solutions. Add to it whene
     - **Problem:** Some nodes require sudo to disable Tailscale SSH, but others allow `tailscale up --ssh=false --accept-risk=lose-ssh` directly without sudo.
     - **Fix:** Try the command without sudo first; fall back to sudo if needed.
 
+12. **WebSocket route defined in `main.py` gets rejected with 403.**
+    - **Problem:** A FastAPI WebSocket route (`@app.websocket`) defined directly in `main.py` was rejected with HTTP 403 during the handshake, even though the identical logic worked when defined in a separate module.
+    - **Fix:** Define the WebSocket route in a separate module (`terminal.py`) and register it via a `register_terminal_routes(app)` function. This avoids the 403 handshake rejection.
+    - **Lesson:** When a WebSocket route 403s but works in isolation, move it out of the main app module.
+
+13. **Interactive SSH terminal via xterm.js + WebSocket.**
+    - **Feature:** The node detail modal has an "Open SSH" button that opens a live terminal (xterm.js) connected to the node over a WebSocket (`/ws/terminal/{node_name}`). The backend bridges the WebSocket to a paramiko SSH session using the per-node user from `config.yaml` and the collector key.
+    - **Message protocol:** Client sends `{"type":"input","data":...}` and `{"type":"resize","cols","rows"}`; server sends `{"type":"output","data":...}` and `{"type":"exit","code","error"}`.
+
 ---
 
 ## End-to-End Testing (run after each turn of development)
