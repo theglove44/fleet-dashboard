@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 
-const CONTROLLER = 'mini-ubuntu' // the collector/controller node
+const CONTROLLER = 'controller' // the collector/controller node
 
 // ---- Node status semantics (state, not device type) ----
 function nodeStatus(node) {
@@ -20,28 +20,28 @@ function typeLabel(node) {
 
 // ---- Constellation layout (hand-placed) ----
 const LAYOUT = {
-  'mini-ubuntu':   { x: 50, y: 50 },
-  'proxmox-zen':   { x: 20, y: 20 },
-  'proxmox-lan':   { x: 18, y: 80 },
-  'loki':          { x: 80, y: 18 },
-  'mediaserver':   { x: 82, y: 82 },
-  'openclaw-1':    { x: 70, y: 50 },
-  'tuckinandtalk': { x: 50, y: 18 },
-  'macbook':       { x: 88, y: 50 },
-  'stormbreaker':  { x: 32, y: 88 },
+  'controller':  { x: 50, y: 50 },
+  'hypervisor-1': { x: 20, y: 20 },
+  'hypervisor-2': { x: 18, y: 80 },
+  'vm-1':        { x: 80, y: 18 },
+  'vm-2':        { x: 82, y: 82 },
+  'vm-3':        { x: 70, y: 50 },
+  'vm-4':        { x: 50, y: 18 },
+  'mac-1':       { x: 88, y: 50 },
+  'mac-2':       { x: 32, y: 88 },
 }
 const MESH = [
-  ['mini-ubuntu', 'proxmox-zen'],
-  ['mini-ubuntu', 'proxmox-lan'],
-  ['mini-ubuntu', 'loki'],
-  ['mini-ubuntu', 'mediaserver'],
-  ['mini-ubuntu', 'openclaw-1'],
-  ['mini-ubuntu', 'tuckinandtalk'],
-  ['mini-ubuntu', 'macbook'],
-  ['mini-ubuntu', 'stormbreaker'],
-  ['proxmox-zen', 'proxmox-lan'],
-  ['loki', 'mediaserver'],
-  ['macbook', 'stormbreaker'],
+  ['controller', 'hypervisor-1'],
+  ['controller', 'hypervisor-2'],
+  ['controller', 'vm-1'],
+  ['controller', 'vm-2'],
+  ['controller', 'vm-3'],
+  ['controller', 'vm-4'],
+  ['controller', 'mac-1'],
+  ['controller', 'mac-2'],
+  ['hypervisor-1', 'hypervisor-2'],
+  ['vm-1', 'vm-2'],
+  ['mac-1', 'mac-2'],
 ]
 
 const STATUS_COLOR = { ok: '#3fb950', warn: '#f0b429', offline: '#6b7280' }
@@ -401,7 +401,7 @@ function App() {
       <main className="content">
         <div className="page-head">
           <h1 className="page-title">Fleet</h1>
-          <div className="page-sub">sapsucker-godzilla.ts.net</div>
+          <div className="page-sub">my-tailnet.ts.net</div>
         </div>
 
         <SummaryStrip nodes={nodes} />

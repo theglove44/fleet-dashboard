@@ -30,7 +30,7 @@ Fleet Dashboard is a fleet management tool for ~11 computers on a tailnet (Ubunt
 The dashboard uses a **Fleet Constellation** design:
 - Dark atmospheric theme (deep ink background `#070a10`)
 - Nodes rendered as glowing orbs on a sky, connected by mesh lines (the tailnet)
-- The central box (`mini-ubuntu` / fleet-manager) is the **HEART** with a pulsing amber ring
+- The central box (`controller` / fleet-manager) is the **HEART** with a pulsing amber ring
 - Nodes sized by role: Proxmox hosts bigger, VMs smaller
 - Node cards with role colors (Proxmox orange, hosts cyan, VMs blue, macOS violet)
 
@@ -50,7 +50,7 @@ This section documents problems encountered and their solutions. Add to it whene
    - **Lesson:** Don't mix Tailscale SSH and regular-key SSH on the same node when a paramiko-based collector is used. Pick one auth path per node.
 
 2. **SSH users differ per node.**
-   - **Problem:** The SSH user is not consistent across the fleet (chris, christof21, christaylor, office, root).
+   - **Problem:** The SSH user is not consistent across the fleet (varies per node).
    - **Fix:** Store the correct user per node in `config.yaml`. Check `~/.ssh/config` for the existing user mapping.
 
 3. **`tailscale ssh` host-key verification quirk.**
@@ -80,11 +80,11 @@ This section documents problems encountered and their solutions. Add to it whene
    - **Fix:** Use `tar czf - | ssh host 'tar xzf -'` to copy the project over SSH.
 
 9. **Some nodes run SSH on non-standard ports.**
-   - **Problem:** `mediaserver` runs SSH on port 2053, not 22. The collector failed to connect until the port was specified.
+   - **Problem:** One node runs SSH on a non-standard port (2053, not 22). The collector failed to connect until the port was specified.
    - **Fix:** The collector and `NodeConfig` now support a per-node `port` field. Set it in `config.yaml` for nodes with custom SSH ports.
 
 10. **Some nodes have minimal `authorized_keys`.**
-    - **Problem:** `openclaw-1` only had 3 keys (macbook, github, fleet-manager). The collector key had to be added manually by the user.
+    - **Problem:** One node only had 3 keys (macbook, github, fleet-manager). The collector key had to be added manually by the user.
     - **Fix:** Check each node's `authorized_keys` and add the collector key manually where needed. Some nodes may not accept automated key push.
 
 11. **Tailscale SSH can be disabled without sudo on some nodes.**
@@ -175,7 +175,7 @@ curl -s http://localhost:5173/api/nodes
 ### 6. Constellation Renders (manual)
 - Open `http://fleet-manager:8011/` in a browser
 - Expect: the constellation map renders with all nodes as orbs
-- Expect: the HEART node (`mini-ubuntu` or fleet-manager) has a pulsing amber ring
+- Expect: the HEART node (`controller` or fleet-manager) has a pulsing amber ring
 - Expect: online nodes glow, offline nodes are dimmed
 
 ### 7. Regression: Existing SSH still works
@@ -187,5 +187,5 @@ curl -s http://localhost:5173/api/nodes
 
 1. Build frontend: `cd frontend && npm run build`
 2. Copy project to fleet-manager: `tar czf - --exclude=.venv --exclude=node_modules --exclude=.git . | ssh chris@fleet-manager 'tar xzf - -C ~/fleet-dashboard'`
-3. Restart backend: `ssh chris@fleet-manager 'sudo systemctl restart fleet-backend'`
+3. Restart backend: `ssh user@fleet-manager 'sudo systemctl restart fleet-backend'`
 4. Verify: `curl -s http://fleet-manager:8011/health`

@@ -24,12 +24,12 @@ Create `backend/config.yaml` (see `config.example.yaml`):
 nodes:
   - name: node-01
     host: node-01.tailnet-name.ts.net
-    user: christof21
+    user: your-user
     os: ubuntu
     group: host
   - name: vm-01
     host: vm-01.tailnet-name.ts.net
-    user: christof21
+    user: your-user
     os: ubuntu
     group: vm
 ```

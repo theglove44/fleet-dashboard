@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from .collector import SSHCollector
 from .terminal import register_terminal_routes
+from .updater import NodeUpdater
 
 app = FastAPI(title="Fleet Dashboard", version="0.1.0")
 
@@ -140,6 +141,37 @@ async def collect_all() -> dict[str, Any]:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/api/update/{node_name}")
+async def update_node(node_name: str) -> dict[str, Any]:
+    """Run package updates on a single node (async, returns immediately)."""
+    node = next((n for n in load_config() if n.name == node_name), None)
+    if node is None:
+        return {"success": False, "error": f"Unknown node: {node_name}"}
+
+    updater = NodeUpdater(node.host, node.user, node.os, port=node.port)
+
+    async def _run() -> None:
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(None, updater.run_updates)
+            _cache[node.name] = {
+                **_cache.get(node.name, {}),
+                "last_update": result,
+            }
+        except Exception as e:  # noqa: BLE001
+            _cache[node.name] = {
+                **_cache.get(node.name, {}),
+                "last_update": {"success": False, "error": str(e)},
+            }
+        finally:
+            # Re-collect the node so pending_updates reflects the update
+            fresh = await asyncio.get_event_loop().run_in_executor(None, collect_one, node)
+            _cache[node.name] = {**_cache.get(node.name, {}), **fresh}
+            _save_cache(_cache)
+
+    asyncio.create_task(_run())
+    return {"status": "started", "node": node_name, "updating": True}
 
 
 # ---- Serve built frontend (production) ----

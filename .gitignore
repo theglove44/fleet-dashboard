@@ -16,3 +16,6 @@ frontend/dist/
 
 # OS
 .DS_Store
+
+# Sensitive config (contains real hostnames, usernames, SSH users)
+backend/config.yaml
