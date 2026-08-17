@@ -100,6 +100,16 @@ This section documents problems encountered and their solutions. Add to it whene
     - **Feature:** The node detail modal has an "Open SSH" button that opens a live terminal (xterm.js) connected to the node over a WebSocket (`/ws/terminal/{node_name}`). The backend bridges the WebSocket to a paramiko SSH session using the per-node user from `config.yaml` and the collector key.
     - **Message protocol:** Client sends `{"type":"input","data":...}` and `{"type":"resize","cols","rows"}`; server sends `{"type":"output","data":...}` and `{"type":"exit","code","error"}`.
 
+14. **Do NOT remove the CORS middleware — it breaks browser POST requests.**
+    - **Problem:** When debugging the WebSocket 403, the CORS middleware was removed. This silently broke the browser's POST `/api/collect` — the browser sends a CORS preflight `OPTIONS` request, which got rejected with 405, so the actual POST never happened and the frontend showed "Failed to fetch."
+    - **Fix:** Re-add the CORS middleware (`allow_origins=["*"]`, `allow_methods=["*"]`, `allow_headers=["*"]`). The WebSocket 403 was a separate issue (route defined in `main.py`), NOT caused by CORS.
+    - **Lesson:** The CORS middleware is required for browser POST requests (preflight). Removing it to fix an unrelated issue breaks POSTs. Keep it. The WebSocket 403 fix was moving the route to `terminal.py`, not removing CORS.
+
+15. **Collection should be asynchronous (returns fast, polls for results).**
+    - **Problem:** The synchronous `/api/collect` took ~8-9s (SSHing into all 9 nodes). The browser connection dropped before the response completed, causing "Failed to fetch."
+    - **Fix:** Make `/api/collect` kick off collection in a background task and return immediately (`{"status":"started"}`). The frontend polls `/api/nodes` every 2s until all nodes report back.
+    - **Lesson:** Long-running requests over the tailnet can be dropped by the browser. Return fast and poll for results instead of holding a long-lived request open.
+
 ---
 
 ## End-to-End Testing (run after each turn of development)

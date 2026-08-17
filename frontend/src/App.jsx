@@ -335,14 +335,30 @@ function App() {
     setCollecting(true)
     try {
       const res = await fetch('/api/collect', { method: 'POST' })
-      const data = await res.json()
-      setNodes(data.nodes || [])
-      setLastUpdated(new Date())
-      setToast({ type: 'ok', msg: `Collected ${data.nodes?.length || 0} nodes` })
-    } catch {
-      setError('Collection failed')
-      setToast({ type: 'error', msg: 'Collection failed' })
-    } finally {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // Collection is async now; poll for results
+      let attempts = 0
+      const poll = async () => {
+        const r = await fetch('/api/nodes')
+        const d = await r.json()
+        setNodes(d.nodes || [])
+        const nodes = d.nodes || []
+        const collected = nodes.filter((n) => n.online || n.error).length
+        attempts += 1
+        if (collected === nodes.length || attempts >= 8) {
+          setCollecting(false)
+          setLastUpdated(new Date())
+          setToast({ type: 'ok', msg: `Collected ${collected}/${nodes.length} nodes` })
+          setTimeout(() => setToast(null), 3000)
+        } else {
+          setTimeout(poll, 2000)
+        }
+      }
+      poll()
+    } catch (e) {
+      const msg = e.message || 'Collection failed'
+      setError(msg)
+      setToast({ type: 'error', msg })
       setCollecting(false)
       setTimeout(() => setToast(null), 3000)
     }

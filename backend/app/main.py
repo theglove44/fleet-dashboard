@@ -11,12 +11,21 @@ from typing import Any
 
 import yaml
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .collector import SSHCollector
 from .terminal import register_terminal_routes
 
 app = FastAPI(title="Fleet Dashboard", version="0.1.0")
+
+# Allow the frontend to call the API (handles CORS preflight for POST)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Register WebSocket SSH terminal route (defined in terminal.py to avoid
 # a 403 handshake rejection that occurs when defined directly in main.py)
@@ -109,19 +118,23 @@ async def get_nodes() -> dict[str, Any]:
 
 @app.post("/api/collect")
 async def collect_all() -> dict[str, Any]:
-    """Collect facts from all nodes (runs SSH in parallel)."""
+    """Kick off collection from all nodes (runs SSH in parallel, async).
+
+    Returns immediately with 202; the frontend polls /api/nodes for results.
+    """
     nodes = load_config()
-    with ThreadPoolExecutor(max_workers=len(nodes) or 1) as pool:
-        loop = asyncio.get_event_loop()
-        futures = [loop.run_in_executor(pool, collect_one, node) for node in nodes]
-        results = await asyncio.gather(*futures)
 
-    for result in results:
-        _cache[result["name"]] = result
+    async def _run() -> None:
+        with ThreadPoolExecutor(max_workers=len(nodes) or 1) as pool:
+            loop = asyncio.get_event_loop()
+            futures = [loop.run_in_executor(pool, collect_one, node) for node in nodes]
+            results = await asyncio.gather(*futures)
+        for result in results:
+            _cache[result["name"]] = result
+        _save_cache(_cache)
 
-    _save_cache(_cache)
-
-    return {"collected": len(results), "nodes": results}
+    asyncio.create_task(_run())
+    return {"status": "started", "collecting": True}
 
 
 @app.get("/health")
