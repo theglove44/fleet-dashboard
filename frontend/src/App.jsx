@@ -334,7 +334,7 @@ function App() {
   const collect = useCallback(async () => {
     setCollecting(true)
     try {
-      const res = await fetch('/api/collect', { method: 'POST' })
+      const res = await fetch('/api/collect?t=' + Date.now(), { method: 'POST' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       // Collection is async now; poll for results
       let attempts = 0

@@ -110,6 +110,11 @@ This section documents problems encountered and their solutions. Add to it whene
     - **Fix:** Make `/api/collect` kick off collection in a background task and return immediately (`{"status":"started"}`). The frontend polls `/api/nodes` every 2s until all nodes report back.
     - **Lesson:** Long-running requests over the tailnet can be dropped by the browser. Return fast and poll for results instead of holding a long-lived request open.
 
+16. **Stale CORS preflight cache can break POSTs even after CORS is fixed.**
+    - **Problem:** After re-adding the CORS middleware, the browser's POST `/api/collect` still failed with "Failed to fetch" — even though curl worked and other POSTs worked. The browser had cached a failed CORS preflight for the exact `/api/collect` URL (from when CORS was removed), and kept reusing it.
+    - **Fix:** Add a cache-busting query param to the request: `fetch('/api/collect?t=' + Date.now(), { method: 'POST' })`. This creates a fresh URL that bypasses the stale preflight cache.
+    - **Lesson:** When a browser POST fails but curl works, suspect a stale cached CORS preflight. A cache-busting query param on the request is a robust fix. This is why the frontend uses `?t=Date.now()` on the collect request.
+
 ---
 
 ## End-to-End Testing (run after each turn of development)
