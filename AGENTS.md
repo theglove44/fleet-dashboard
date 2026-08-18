@@ -115,6 +115,14 @@ This section documents problems encountered and their solutions. Add to it whene
     - **Fix:** Add a cache-busting query param to the request: `fetch('/api/collect?t=' + Date.now(), { method: 'POST' })`. This creates a fresh URL that bypasses the stale preflight cache.
     - **Lesson:** When a browser POST fails but curl works, suspect a stale cached CORS preflight. A cache-busting query param on the request is a robust fix. This is why the frontend uses `?t=Date.now()` on the collect request.
 
+17. **Update management (Phase 3): one-click apt/brew upgrade.**
+    - **Feature:** Node detail modal has an "Update" button that runs `apt upgrade` (Linux) or `brew upgrade` (macOS) on the node via `/api/update/{node}`. Async: returns immediately, frontend polls for the result.
+    - **Re-collect after update:** The endpoint re-collects the node after the update so `pending_updates` reflects the real state. Without this, the dashboard showed stale counts after updating.
+    - **sudo-rs restriction:** Some nodes use `sudo-rs` which rejects `DEBIAN_FRONTEND=noninteractive` via sudo env-var restrictions. Run plain `sudo apt-get upgrade -y` instead.
+    - **Root user:** If the node user is `root` (e.g. proxmox-lan), skip `sudo` entirely.
+    - **Passwordless sudo for updates:** Nodes that need it got a scoped sudoers drop-in: `christof21 ALL=(ALL) NOPASSWD: /usr/bin/apt-get` in `/etc/sudoers.d/fleet-updates` (chmod 440). Scoped to apt-get only (least privilege).
+    - **Brew path:** brew is not on the non-interactive SSH PATH on macOS; use full path `/opt/homebrew/bin/brew` (Apple Silicon) or `/usr/local/bin/brew` (Intel).
+
 ---
 
 ## End-to-End Testing (run after each turn of development)

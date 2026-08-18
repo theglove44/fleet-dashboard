@@ -44,10 +44,11 @@ class NodeUpdater:
         if self.os_type == "macos":
             brew = "/opt/homebrew/bin/brew"
             return [f"{brew} update && {brew} upgrade 2>&1"]
-        # Linux (apt)
+        # Linux (apt). If user is root, no sudo needed.
+        sudo = "" if self.user == "root" else "sudo "
         return [
-            "sudo apt-get update -qq 2>&1",
-            "sudo apt-get upgrade -y 2>&1",
+            f"{sudo}apt-get update -qq 2>&1",
+            f"{sudo}apt-get upgrade -y 2>&1",
         ]
 
     def run_updates(self) -> dict:
