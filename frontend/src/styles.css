@@ -79,6 +79,16 @@ body {
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.ghost {
+  background: transparent;
+  color: var(--text-1);
+  border: 1px solid var(--border);
+}
+.btn.ghost:hover { filter: none; background: var(--bg-2); }
+.btn.ghost .spinner {
+  border-color: rgba(232, 236, 244, 0.3);
+  border-top-color: var(--text-1);
+}
 .btn .spinner {
   display: inline-block;
   width: 12px; height: 12px;
@@ -192,6 +202,18 @@ body {
 .legend-dot.offline { background: var(--offline); }
 .legend-line { color: var(--text-3); opacity: 0.6; }
 
+.constellation .heart { color: var(--accent); }
+.constellation .heart-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: heart-pulse 2.8s ease-out infinite;
+}
+.constellation .heart-ring.delay { animation-delay: 1.4s; }
+@keyframes heart-pulse {
+  0% { transform: scale(1); opacity: 0.75; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
 /* ---- Error / toast ---- */
 .error-banner {
   background: rgba(248, 81, 73, 0.1);
@@ -304,6 +326,28 @@ body {
 .modal-actions {
   display: flex;
   justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
+.update-msg {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: calc(var(--sp-3) * -1) 0 var(--sp-4);
+}
+.update-msg.ok { color: var(--ok); }
+.update-msg.err { color: var(--danger); }
+.update-output {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
 }
 
 /* ---- SSH terminal ---- */

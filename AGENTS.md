@@ -17,7 +17,7 @@ Fleet Dashboard is a fleet management tool for ~11 computers on a tailnet (Ubunt
 
 ## Key Files
 
-- `backend/app/main.py` - FastAPI app (routes: `/api/nodes`, `/api/collect`, `/health`)
+- `backend/app/main.py` - FastAPI app (routes: `/api/nodes`, `/api/collect`, `/api/update/{node}`, `/health`)
 - `backend/app/collector.py` - SSH-based inventory collector (paramiko)
 - `backend/config.yaml` - Node configuration (hostname, user, os, group)
 - `frontend/src/App.jsx` - React dashboard (Fleet Constellation design)
@@ -30,7 +30,7 @@ Fleet Dashboard is a fleet management tool for ~11 computers on a tailnet (Ubunt
 The dashboard uses a **Fleet Constellation** design:
 - Dark atmospheric theme (deep ink background `#070a10`)
 - Nodes rendered as glowing orbs on a sky, connected by mesh lines (the tailnet)
-- The central box (`controller` / fleet-manager) is the **HEART** with a pulsing amber ring
+- A pulsing amber **HEART** sits at the centre of the mesh (the tailnet). `controller` / `fleet-manager` get a dashed ring if they appear in `config.yaml`
 - Nodes sized by role: Proxmox hosts bigger, VMs smaller
 - Node cards with role colors (Proxmox orange, hosts cyan, VMs blue, macOS violet)
 
@@ -121,7 +121,13 @@ This section documents problems encountered and their solutions. Add to it whene
     - **sudo-rs restriction:** Some nodes use `sudo-rs` which rejects `DEBIAN_FRONTEND=noninteractive` via sudo env-var restrictions. Run plain `sudo apt-get upgrade -y` instead.
     - **Root user:** If the node user is `root` (e.g. proxmox-lan), skip `sudo` entirely.
     - **Passwordless sudo for updates:** Nodes that need it got a scoped sudoers drop-in: `christof21 ALL=(ALL) NOPASSWD: /usr/bin/apt-get` in `/etc/sudoers.d/fleet-updates` (chmod 440). Scoped to apt-get only (least privilege).
-    - **Brew path:** brew is not on the non-interactive SSH PATH on macOS; use full path `/opt/homebrew/bin/brew` (Apple Silicon) or `/usr/local/bin/brew` (Intel).
+    - **Brew path:** brew is not on the non-interactive SSH PATH on macOS. Prefix with `export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"` so Apple Silicon and Intel both work.
+    - **Polling:** `/api/update` sets `updating: true` before returning, then `updating: false` plus `last_update.finished_at` when done. Frontend polls `/api/nodes` until that flag clears. Re-collect must not wipe `last_update` or `updating`.
+
+18. **Constellation LAYOUT keys must match `config.yaml` node names.**
+    - **Problem:** Orbs are looked up with `LAYOUT[node.name]` and dropped (`return null`) when missing. Placeholder keys (`controller`, `hypervisor-1`, `vm-1`…) hid every real node.
+    - **Fix:** Hand-place the real names. Unknown nodes fall back to a circle around the HEART so a new config entry still renders.
+    - **Lesson:** If a node is in config but invisible on the sky, the layout map is stale — do not filter unknown names.
 
 ---
 

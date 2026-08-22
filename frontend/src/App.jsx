@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 
-const CONTROLLER = 'controller' // the collector/controller node
+const HEART_NAMES = new Set(['controller', 'fleet-manager'])
 
 // ---- Node status semantics (state, not device type) ----
 function nodeStatus(node) {
@@ -15,64 +15,92 @@ function nodeStatus(node) {
 function typeLabel(node) {
   if (node.group === 'proxmox') return 'Proxmox'
   if (node.group === 'vm') return 'VM'
+  if (node.os_type === 'macos') return 'macOS'
   return 'Host'
 }
 
-// ---- Constellation layout (hand-placed) ----
+function orbRadius(node) {
+  if (HEART_NAMES.has(node.name)) return 6
+  if (node.group === 'proxmox') return 5.4
+  if (node.group === 'vm') return 3.1
+  return 4.2
+}
+
+// ---- Constellation layout (hand-placed, keys must match config.yaml names) ----
+const HEART_POS = { x: 50, y: 48 }
 const LAYOUT = {
-  'controller':  { x: 50, y: 50 },
-  'hypervisor-1': { x: 20, y: 20 },
-  'hypervisor-2': { x: 18, y: 80 },
-  'vm-1':        { x: 80, y: 18 },
-  'vm-2':        { x: 82, y: 82 },
-  'vm-3':        { x: 70, y: 50 },
-  'vm-4':        { x: 50, y: 18 },
-  'mac-1':       { x: 88, y: 50 },
-  'mac-2':       { x: 32, y: 88 },
+  'proxmox-zen':   { x: 22, y: 28 },
+  'proxmox-lan':   { x: 18, y: 68 },
+  'mini-ubuntu':   { x: 40, y: 46 },
+  'mediaserver':   { x: 58, y: 30 },
+  'loki':          { x: 70, y: 50 },
+  'openclaw-1':    { x: 80, y: 72 },
+  'tuckinandtalk': { x: 50, y: 78 },
+  'macbook':       { x: 78, y: 22 },
+  'stormbreaker':  { x: 30, y: 86 },
 }
 const MESH = [
-  ['controller', 'hypervisor-1'],
-  ['controller', 'hypervisor-2'],
-  ['controller', 'vm-1'],
-  ['controller', 'vm-2'],
-  ['controller', 'vm-3'],
-  ['controller', 'vm-4'],
-  ['controller', 'mac-1'],
-  ['controller', 'mac-2'],
-  ['hypervisor-1', 'hypervisor-2'],
-  ['vm-1', 'vm-2'],
-  ['mac-1', 'mac-2'],
+  ['proxmox-zen', 'proxmox-lan'],
+  ['proxmox-zen', 'mini-ubuntu'],
+  ['proxmox-zen', 'mediaserver'],
+  ['proxmox-lan', 'tuckinandtalk'],
+  ['mini-ubuntu', 'mediaserver'],
+  ['mini-ubuntu', 'loki'],
+  ['loki', 'openclaw-1'],
+  ['openclaw-1', 'tuckinandtalk'],
+  ['macbook', 'mediaserver'],
+  ['macbook', 'mini-ubuntu'],
+  ['macbook', 'stormbreaker'],
 ]
 
 const STATUS_COLOR = { ok: '#3fb950', warn: '#f0b429', offline: '#6b7280' }
 const STATUS_LABEL = { ok: 'Online', warn: 'Updates pending', offline: 'Offline' }
 
+function nodePos(name, names) {
+  if (LAYOUT[name]) return LAYOUT[name]
+  const unknown = names.filter((n) => !LAYOUT[n])
+  const i = unknown.indexOf(name)
+  const n = Math.max(unknown.length, 1)
+  const angle = (2 * Math.PI * i) / n - Math.PI / 2
+  return { x: 50 + 38 * Math.cos(angle), y: 50 + 34 * Math.sin(angle) }
+}
+
 function Constellation({ nodes, onSelect }) {
   const [hover, setHover] = useState(null)
+  const names = useMemo(() => nodes.map((n) => n.name), [nodes])
+  const posOf = useCallback((name) => nodePos(name, names), [names])
   const statusMap = useMemo(() => {
     const m = {}
     nodes.forEach((n) => { m[n.name] = nodeStatus(n) })
     return m
   }, [nodes])
 
-  const lines = MESH.map(([a, b], i) => {
-    const pa = LAYOUT[a], pb = LAYOUT[b]
-    if (!pa || !pb) return null
+  const spokeLines = names.map((name) => {
+    const p = posOf(name)
+    const active = hover === name
+    return (
+      <line key={`spoke-${name}`} x1={HEART_POS.x} y1={HEART_POS.y} x2={p.x} y2={p.y}
+        stroke="#3a4a66" strokeWidth={active ? 0.7 : 0.28}
+        strokeLinecap="round" />
+    )
+  })
+
+  const peerLines = MESH.map(([a, b], i) => {
+    if (!names.includes(a) || !names.includes(b)) return null
+    const pa = posOf(a), pb = posOf(b)
     const active = hover === a || hover === b
     return (
-      <line key={i} x1={pa.x} y1={pa.y} x2={pb.x} y2={pb.y}
+      <line key={`mesh-${i}`} x1={pa.x} y1={pa.y} x2={pb.x} y2={pb.y}
         stroke="#3a4a66" strokeWidth={active ? 0.8 : 0.4}
         strokeLinecap="round" />
     )
   })
 
   const orbs = nodes.map((node) => {
-    const pos = LAYOUT[node.name]
-    if (!pos) return null
+    const pos = posOf(node.name)
     const status = statusMap[node.name]
-    const isController = node.name === CONTROLLER
-    const cores = node.cpu_count || 2
-    const r = isController ? 6 : Math.min(3 + cores * 0.6, 6.5)
+    const isHeart = HEART_NAMES.has(node.name)
+    const r = orbRadius(node)
     const isHover = hover === node.name
     const color = STATUS_COLOR[status]
 
@@ -85,7 +113,7 @@ function Constellation({ nodes, onSelect }) {
         style={{ cursor: 'pointer' }}
       >
         <circle r={r} fill={color} opacity={status === 'offline' ? 0.3 : 0.9} />
-        {isController && <circle r={r + 3} fill="none" stroke={color} strokeWidth="0.5" strokeDasharray="1.5 1.5" />}
+        {isHeart && <circle r={r + 3} fill="none" stroke={color} strokeWidth="0.5" strokeDasharray="1.5 1.5" />}
         <text y={r + 6} textAnchor="middle" fontSize="2.4" fill={isHover ? '#e8ecf4' : '#7c8698'} fontFamily="monospace">
           {node.name}
         </text>
@@ -95,7 +123,13 @@ function Constellation({ nodes, onSelect }) {
 
   return (
     <svg viewBox="0 0 100 100" className="constellation" preserveAspectRatio="xMidYMid meet">
-      {lines}
+      {spokeLines}
+      {peerLines}
+      <g className="heart" transform={`translate(${HEART_POS.x}, ${HEART_POS.y})`}>
+        <circle r="2.1" fill="currentColor" />
+        <circle className="heart-ring" r="3.6" fill="none" stroke="currentColor" strokeWidth="0.4" />
+        <circle className="heart-ring delay" r="3.6" fill="none" stroke="currentColor" strokeWidth="0.4" />
+      </g>
       {orbs}
     </svg>
   )
@@ -130,11 +164,25 @@ function SummaryStrip({ nodes }) {
   )
 }
 
+function lastUpdateLabel(last) {
+  if (!last) return '—'
+  if (last.success) return 'OK'
+  return last.error || `Failed (exit ${last.exit_code ?? '?'})`
+}
+
+function tailOutput(text, lines = 16) {
+  if (!text) return ''
+  return text.trim().split('\n').slice(-lines).join('\n')
+}
+
 // ---- Node detail popup (modal) ----
-function NodeDetail({ node, onClose }) {
+function NodeDetail({ node, onClose, onNodes }) {
   const status = nodeStatus(node)
-  const isController = node.name === CONTROLLER
+  const isHeart = HEART_NAMES.has(node.name)
   const [showTerminal, setShowTerminal] = useState(false)
+  const [localUpdating, setLocalUpdating] = useState(false)
+  const [updateMsg, setUpdateMsg] = useState(null)
+  const updating = localUpdating || !!node.updating
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -142,7 +190,57 @@ function NodeDetail({ node, onClose }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const runUpdate = async () => {
+    if (!node.online || updating) return
+    setLocalUpdating(true)
+    setUpdateMsg(null)
+    const started = Date.now()
+    try {
+      const res = await fetch(`/api/update/${encodeURIComponent(node.name)}?t=${Date.now()}`, { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || body.success === false) {
+        throw new Error(body.error || `HTTP ${res.status}`)
+      }
+      let attempts = 0
+      const tick = async () => {
+        try {
+          const r = await fetch('/api/nodes')
+          const d = await r.json()
+          const list = d.nodes || []
+          onNodes(list)
+          const fresh = list.find((n) => n.name === node.name)
+          const finishedAt = fresh?.last_update?.finished_at
+          const finishedAfterStart = finishedAt && new Date(finishedAt).getTime() >= started - 2000
+          attempts += 1
+          if ((fresh && fresh.updating === false && finishedAfterStart) || attempts >= 180) {
+            setLocalUpdating(false)
+            if (fresh?.last_update?.success) {
+              setUpdateMsg({ ok: true, text: 'Updates installed' })
+            } else if (fresh?.last_update) {
+              setUpdateMsg({
+                ok: false,
+                text: fresh.last_update.error || `Update failed (exit ${fresh.last_update.exit_code})`,
+              })
+            } else {
+              setUpdateMsg({ ok: false, text: 'Update timed out' })
+            }
+            return
+          }
+        } catch {
+          // keep polling through transient fetch errors
+        }
+        setTimeout(tick, 2000)
+      }
+      tick()
+    } catch (e) {
+      setLocalUpdating(false)
+      setUpdateMsg({ ok: false, text: e.message || 'Update failed' })
+    }
+  }
+
   if (!node) return null
+
+  const last = node.last_update
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -151,7 +249,7 @@ function NodeDetail({ node, onClose }) {
           <div className="modal-title-row">
             <span className={`status-dot ${status}`} />
             <h2 className="modal-title">{node.name}</h2>
-            {isController && <span className="type-badge controller">Controller</span>}
+            {isHeart && <span className="type-badge controller">Controller</span>}
           </div>
           <button className="modal-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
@@ -201,12 +299,31 @@ function NodeDetail({ node, onClose }) {
             <dt>Pending updates</dt>
             <dd className={status === 'warn' ? 'warn' : ''}>{node.pending_updates ?? '—'}</dd>
           </div>
+          <div className="detail-row">
+            <dt>Last update</dt>
+            <dd className={last && !last.success ? 'warn' : ''}>{lastUpdateLabel(last)}</dd>
+          </div>
         </dl>
+
+        {updateMsg && (
+          <div className={`update-msg ${updateMsg.ok ? 'ok' : 'err'}`}>{updateMsg.text}</div>
+        )}
+        {last && !last.success && last.output && (
+          <pre className="update-output">{tailOutput(last.output)}</pre>
+        )}
 
         <div className="modal-actions">
           {node.online && (
-            <button className="btn" onClick={() => setShowTerminal((v) => !v)}>
+            <button className="btn ghost" onClick={() => setShowTerminal((v) => !v)}>
               {showTerminal ? 'Close SSH' : 'Open SSH'}
+            </button>
+          )}
+          {node.online && (
+            <button className="btn" onClick={runUpdate} disabled={updating}>
+              {updating && <span className="spinner" />}
+              {updating
+                ? 'Updating…'
+                : (node.pending_updates ? `Update (${node.pending_updates})` : 'Update')}
             </button>
           )}
         </div>
@@ -401,13 +518,13 @@ function App() {
       <main className="content">
         <div className="page-head">
           <h1 className="page-title">Fleet</h1>
-          <div className="page-sub">my-tailnet.ts.net</div>
+          <div className="page-sub">sapsucker-godzilla.ts.net</div>
         </div>
 
         <SummaryStrip nodes={nodes} />
 
         <div className="constellation-panel">
-          <div className="panel-title">Network · radius scales with cores · click a node for details</div>
+          <div className="panel-title">Network · size by role · click a node for details</div>
           {loading ? (
             <div className="constellation-loading">Charting the sky…</div>
           ) : (
@@ -425,7 +542,9 @@ function App() {
         {toast && <div className="error-banner" style={{ borderColor: toast.type === 'error' ? 'var(--danger)' : 'var(--ok)' }}>{toast.msg}</div>}
       </main>
 
-      {selectedNode && <NodeDetail node={selectedNode} onClose={() => setSelected(null)} />}
+      {selectedNode && (
+        <NodeDetail node={selectedNode} onClose={() => setSelected(null)} onNodes={setNodes} />
+      )}
     </div>
   )
 }

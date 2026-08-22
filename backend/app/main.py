@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -85,7 +86,10 @@ def collect_one(node: NodeConfig) -> dict[str, Any]:
         return {
             "name": node.name,
             "host": node.host,
+            "user": node.user,
+            "port": node.port,
             "group": node.group,
+            "os_type": node.os,
             "online": True,
             "last_seen": None,  # Phase 2 adds timestamps
             **facts.to_dict(),
@@ -94,7 +98,10 @@ def collect_one(node: NodeConfig) -> dict[str, Any]:
         return {
             "name": node.name,
             "host": node.host,
+            "user": node.user,
+            "port": node.port,
             "group": node.group,
+            "os_type": node.os,
             "online": False,
             "error": str(e),
         }
@@ -106,14 +113,18 @@ async def get_nodes() -> dict[str, Any]:
     nodes = load_config()
     results = []
     for node in nodes:
-        entry = _cache.get(node.name) or {
+        cached = _cache.get(node.name)
+        stub = {"online": False, "error": "not yet collected"} if not cached else {}
+        results.append({
+            **stub,
+            **(cached or {}),
             "name": node.name,
             "host": node.host,
+            "user": node.user,
+            "port": node.port,
             "group": node.group,
-            "online": False,
-            "error": "not yet collected",
-        }
-        results.append(entry)
+            "os_type": node.os,
+        })
     return {"nodes": results}
 
 
@@ -131,7 +142,13 @@ async def collect_all() -> dict[str, Any]:
             futures = [loop.run_in_executor(pool, collect_one, node) for node in nodes]
             results = await asyncio.gather(*futures)
         for result in results:
-            _cache[result["name"]] = result
+            # Merge fresh facts but preserve last_update (collect should not wipe update results)
+            prev = _cache.get(result["name"], {})
+            _cache[result["name"]] = {
+                **result,
+                "last_update": prev.get("last_update"),
+                "updating": prev.get("updating"),
+            }
         _save_cache(_cache)
 
     asyncio.create_task(_run())
@@ -151,24 +168,22 @@ async def update_node(node_name: str) -> dict[str, Any]:
         return {"success": False, "error": f"Unknown node: {node_name}"}
 
     updater = NodeUpdater(node.host, node.user, node.os, port=node.port)
+    _cache[node.name] = {**_cache.get(node.name, {}), "updating": True}
 
     async def _run() -> None:
         try:
             result = await asyncio.get_event_loop().run_in_executor(None, updater.run_updates)
-            _cache[node.name] = {
-                **_cache.get(node.name, {}),
-                "last_update": result,
-            }
         except Exception as e:  # noqa: BLE001
-            _cache[node.name] = {
-                **_cache.get(node.name, {}),
-                "last_update": {"success": False, "error": str(e)},
-            }
-        finally:
-            # Re-collect the node so pending_updates reflects the update
+            result = {"success": False, "error": str(e)}
+        result["finished_at"] = datetime.now(timezone.utc).isoformat()
+        try:
+            # Re-collect so pending_updates reflects the real state
             fresh = await asyncio.get_event_loop().run_in_executor(None, collect_one, node)
-            _cache[node.name] = {**_cache.get(node.name, {}), **fresh}
-            _save_cache(_cache)
+        except Exception:
+            fresh = {}
+        prev = _cache.get(node.name, {})
+        _cache[node.name] = {**prev, **fresh, "last_update": result, "updating": False}
+        _save_cache(_cache)
 
     asyncio.create_task(_run())
     return {"status": "started", "node": node_name, "updating": True}

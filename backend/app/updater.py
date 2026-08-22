@@ -42,8 +42,11 @@ class NodeUpdater:
     def get_commands(self) -> list[str]:
         """Return the shell commands to run for updates on this OS."""
         if self.os_type == "macos":
-            brew = "/opt/homebrew/bin/brew"
-            return [f"{brew} update && {brew} upgrade 2>&1"]
+            # Apple Silicon: /opt/homebrew; Intel: /usr/local
+            return [
+                'export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; '
+                "brew update && brew upgrade 2>&1"
+            ]
         # Linux (apt). If user is root, no sudo needed.
         sudo = "" if self.user == "root" else "sudo "
         return [
