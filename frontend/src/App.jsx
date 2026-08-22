@@ -27,17 +27,19 @@ function orbRadius(node) {
 }
 
 // ---- Constellation layout (hand-placed, keys must match config.yaml names) ----
+// The controller hub (mini-ubuntu) sits ON the HEART; the rest form a ring in
+// the same order as the MESH path, so peer edges hug the rim with no crossings.
 const HEART_POS = { x: 50, y: 48 }
 const LAYOUT = {
-  'proxmox-zen':   { x: 22, y: 28 },
-  'proxmox-lan':   { x: 18, y: 68 },
-  'mini-ubuntu':   { x: 40, y: 46 },
-  'mediaserver':   { x: 58, y: 30 },
-  'loki':          { x: 70, y: 50 },
-  'openclaw-1':    { x: 80, y: 72 },
-  'tuckinandtalk': { x: 50, y: 78 },
-  'macbook':       { x: 78, y: 22 },
-  'stormbreaker':  { x: 30, y: 86 },
+  'mini-ubuntu':   { x: 50, y: 48 },
+  'stormbreaker':  { x: 50, y: 13 },
+  'macbook':       { x: 76, y: 23 },
+  'mediaserver':   { x: 85, y: 48 },
+  'proxmox-zen':   { x: 76, y: 73 },
+  'proxmox-lan':   { x: 50, y: 84 },
+  'tuckinandtalk': { x: 24, y: 73 },
+  'openclaw-1':    { x: 15, y: 48 },
+  'loki':          { x: 24, y: 23 },
 }
 const MESH = [
   ['proxmox-zen', 'proxmox-lan'],
@@ -55,6 +57,7 @@ const MESH = [
 
 const STATUS_COLOR = { ok: '#3fb950', warn: '#f0b429', offline: '#6b7280' }
 const STATUS_LABEL = { ok: 'Online', warn: 'Updates pending', offline: 'Offline' }
+const STATUS_SHORT = { ok: 'Online', warn: 'Updates', offline: 'Offline' }
 
 function nodePos(name, names) {
   if (LAYOUT[name]) return LAYOUT[name]
@@ -164,10 +167,142 @@ function SummaryStrip({ nodes }) {
   )
 }
 
+// ---- PRETTY_NAME arrives quoted from os-release; strip quotes (also covers stale cache) ----
+function osLabel(node) {
+  return (node.os_version || node.os || '').replace(/"/g, '') || '—'
+}
+
+function relTime(iso) {
+  if (!iso) return ''
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+  if (s < 60) return 'just now'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
+// ---- Sortable node table (the scannable list under the graph) ----
+function NodeTable({ nodes, onSelect }) {
+  const [sortKey, setSortKey] = useState('updates')
+  const [sortDir, setSortDir] = useState(-1)
+  const [filter, setFilter] = useState('all')
+
+  const severity = { offline: 0, ok: 1, warn: 2 }
+  const columns = [
+    { key: 'name', label: 'Name' },
+    { key: 'role', label: 'Role' },
+    { key: 'status', label: 'Status' },
+    { key: 'updates', label: 'Updates' },
+    { key: 'mem', label: 'Memory' },
+    { key: 'uptime', label: 'Uptime' },
+  ]
+  const sortValue = {
+    name: (n) => n.name.toLowerCase(),
+    role: (n) => typeLabel(n),
+    status: (n) => severity[nodeStatus(n)],
+    updates: (n) => n.pending_updates || 0,
+    mem: (n) => (n.online ? (n.mem_used_gb || 0) : -1),
+    uptime: (n) => n.uptime || '',
+  }
+
+  const filtered = useMemo(() => {
+    let list = nodes
+    if (filter === 'online') list = nodes.filter((n) => n.online)
+    else if (filter === 'warn') list = nodes.filter((n) => nodeStatus(n) === 'warn')
+    else if (filter === 'offline') list = nodes.filter((n) => !n.online)
+    return [...list].sort((a, b) => {
+      const va = sortValue[sortKey](a)
+      const vb = sortValue[sortKey](b)
+      if (va < vb) return -sortDir
+      if (va > vb) return sortDir
+      return a.name.localeCompare(b.name)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, sortKey, sortDir, filter])
+
+  const toggleSort = (key) => {
+    if (key === sortKey) setSortDir((d) => -d)
+    else {
+      setSortKey(key)
+      setSortDir(key === 'name' || key === 'role' || key === 'uptime' ? 1 : -1)
+    }
+  }
+
+  const filters = [
+    ['all', `All (${nodes.length})`],
+    ['online', `Online (${nodes.filter((n) => n.online).length})`],
+    ['warn', `Updates (${nodes.filter((n) => nodeStatus(n) === 'warn').length})`],
+    ['offline', `Offline (${nodes.filter((n) => !n.online).length})`],
+  ]
+
+  return (
+    <div className="node-table-panel">
+      <div className="table-toolbar">
+        <span className="panel-title">Nodes</span>
+        <div className="table-filters">
+          {filters.map(([key, label]) => (
+            <button
+              key={key}
+              className={`chip ${filter === key ? 'active' : ''}`}
+              onClick={() => setFilter(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <table className="node-table">
+        <thead>
+          <tr>
+            {columns.map(({ key, label }) => (
+              <th key={key} onClick={() => toggleSort(key)} className={sortKey === key ? 'sorted' : ''}>
+                {label}
+                {sortKey === key && <span className="sort-arrow">{sortDir === 1 ? ' ▲' : ' ▼'}</span>}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((n) => {
+            const st = nodeStatus(n)
+            return (
+              <tr key={n.name} onClick={() => onSelect(n)}>
+                <td className="cell-name">{n.name}</td>
+                <td>{typeLabel(n)}</td>
+                <td>
+                  <span className={`status-cell ${st}`}>
+                    <span className={`dot ${st}`} />
+                    {STATUS_SHORT[st]}
+                  </span>
+                </td>
+                <td className={`mono ${n.pending_updates > 0 ? 'warn' : ''}`}>
+                  {n.online ? (n.pending_updates ?? 0) : '—'}
+                </td>
+                <td className="mono">
+                  {n.mem_used_gb ? `${n.mem_used_gb}/${n.mem_total_gb}G` : '—'}
+                </td>
+                <td className="mono cell-uptime">{n.uptime || '—'}</td>
+              </tr>
+            )
+          })}
+          {filtered.length === 0 && (
+            <tr><td colSpan={columns.length} className="empty-row">No nodes match this filter</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function lastUpdateLabel(last) {
   if (!last) return '—'
-  if (last.success) return 'OK'
-  return last.error || `Failed (exit ${last.exit_code ?? '?'})`
+  const state = last.success
+    ? 'OK'
+    : (last.error || `Failed (exit ${last.exit_code ?? '?'})`)
+  const when = last.finished_at ? relTime(last.finished_at) : ''
+  return when ? `${state} · ${when}` : state
 }
 
 function tailOutput(text, lines = 16) {
@@ -182,6 +317,7 @@ function NodeDetail({ node, onClose, onNodes }) {
   const [showTerminal, setShowTerminal] = useState(false)
   const [localUpdating, setLocalUpdating] = useState(false)
   const [updateMsg, setUpdateMsg] = useState(null)
+  const [confirmPkgs, setConfirmPkgs] = useState(null) // null | {loading} | {packages, error}
   const updating = localUpdating || !!node.updating
 
   useEffect(() => {
@@ -190,8 +326,22 @@ function NodeDetail({ node, onClose, onNodes }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // Step 1: fetch the pending package list and show it for confirmation
+  const startUpdate = async () => {
+    if (!node.online || updating) return
+    setConfirmPkgs({ loading: true })
+    try {
+      const res = await fetch(`/api/updates/${encodeURIComponent(node.name)}?t=${Date.now()}`)
+      const body = await res.json()
+      setConfirmPkgs({ packages: body.packages || [], error: !body.success ? body.error : null })
+    } catch (e) {
+      setConfirmPkgs({ packages: [], error: e.message || 'Could not fetch package list' })
+    }
+  }
+
   const runUpdate = async () => {
     if (!node.online || updating) return
+    setConfirmPkgs(null)
     setLocalUpdating(true)
     setUpdateMsg(null)
     const started = Date.now()
@@ -265,7 +415,7 @@ function NodeDetail({ node, onClose, onNodes }) {
         <dl className="detail-list">
           <div className="detail-row">
             <dt>OS</dt>
-            <dd>{node.os_version || node.os || '—'}</dd>
+            <dd>{osLabel(node)}</dd>
           </div>
           <div className="detail-row">
             <dt>Architecture</dt>
@@ -318,8 +468,8 @@ function NodeDetail({ node, onClose, onNodes }) {
               {showTerminal ? 'Close SSH' : 'Open SSH'}
             </button>
           )}
-          {node.online && (
-            <button className="btn" onClick={runUpdate} disabled={updating}>
+          {node.online && !confirmPkgs && (
+            <button className="btn" onClick={startUpdate} disabled={updating}>
               {updating && <span className="spinner" />}
               {updating
                 ? 'Updating…'
@@ -327,6 +477,32 @@ function NodeDetail({ node, onClose, onNodes }) {
             </button>
           )}
         </div>
+
+        {confirmPkgs && (
+          <div className="confirm-panel">
+            <div className="confirm-title">Run updates on {node.name}?</div>
+            {confirmPkgs.loading ? (
+              <div className="confirm-loading"><span className="spinner spinner-dark" />Fetching package list…</div>
+            ) : (
+              <>
+                <div className={`confirm-sub ${confirmPkgs.error ? 'err' : ''}`}>
+                  {confirmPkgs.error
+                    ? `Could not list packages: ${confirmPkgs.error}`
+                    : confirmPkgs.packages.length === 0
+                      ? 'No pending packages found — you can still run an upgrade.'
+                      : `Will upgrade ${confirmPkgs.packages.length} package${confirmPkgs.packages.length === 1 ? '' : 's'}:`}
+                </div>
+                {!confirmPkgs.error && confirmPkgs.packages.length > 0 && (
+                  <pre className="update-output">{confirmPkgs.packages.join('\n')}</pre>
+                )}
+                <div className="modal-actions">
+                  <button className="btn ghost" onClick={() => setConfirmPkgs(null)}>Cancel</button>
+                  <button className="btn danger" onClick={runUpdate}>Run update</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {showTerminal && node.online && (
           <SSHTerminal node={node} />
@@ -483,6 +659,13 @@ function App() {
 
   useEffect(() => { fetchNodes() }, [fetchNodes])
 
+  // Re-render every 30s so relative times ("3m ago") stay fresh
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30000)
+    return () => clearInterval(id)
+  }, [])
+
   const online = nodes.filter((n) => n.online).length
   const anyOffline = online < nodes.length
 
@@ -537,6 +720,10 @@ function App() {
             <span className="legend-item"><span className="legend-line">——</span> Tailscale mesh</span>
           </div>
         </div>
+
+        {!loading && (
+          <NodeTable nodes={nodes} onSelect={(n) => setSelected(n.name)} />
+        )}
 
         {error && <div className="error-banner">{error}</div>}
         {toast && <div className="error-banner" style={{ borderColor: toast.type === 'error' ? 'var(--danger)' : 'var(--ok)' }}>{toast.msg}</div>}

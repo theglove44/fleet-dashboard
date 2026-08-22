@@ -160,6 +160,22 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/updates/{node_name}")
+async def get_upgradable(node_name: str) -> dict[str, Any]:
+    """List pending packages on a node (used for the update confirm dialog)."""
+    node = next((n for n in load_config() if n.name == node_name), None)
+    if node is None:
+        return {"success": False, "error": f"Unknown node: {node_name}", "packages": []}
+    collector = SSHCollector(node.host, node.user, node.os, port=node.port)
+    try:
+        packages = await asyncio.get_event_loop().run_in_executor(
+            None, collector.upgradable_packages
+        )
+        return {"success": True, "packages": packages}
+    except Exception as e:  # noqa: BLE001
+        return {"success": False, "error": str(e), "packages": []}
+
+
 @app.post("/api/update/{node_name}")
 async def update_node(node_name: str) -> dict[str, Any]:
     """Run package updates on a single node (async, returns immediately)."""

@@ -97,7 +97,10 @@ class SSHCollector:
         return facts
 
     def _collect_linux(self, client: paramiko.SSHClient, facts: NodeFacts) -> None:
-        facts.os = self._run(client, "lsb_release -ds 2>/dev/null || cat /etc/os-release | grep PRETTY_NAME | cut -d'=' -f2")
+        facts.os = self._run(
+            client,
+            "lsb_release -ds 2>/dev/null || cat /etc/os-release | grep PRETTY_NAME | cut -d'=' -f2",
+        ).strip().strip('"')
         facts.cpu_model = self._run(client, "grep 'model name' /proc/cpuinfo | head -1 | cut -d':' -f2 | xargs")
         facts.cpu_count = int(self._run(client, "nproc") or 0)
 
@@ -117,6 +120,10 @@ class SSHCollector:
         facts.pending_updates = int(updates or 0)
 
     def _collect_macos(self, client: paramiko.SSHClient, facts: NodeFacts) -> None:
+        # macOS uptime lacks `uptime -p`; extract the "up ..." segment instead
+        facts.uptime = self._run(
+            client, "uptime | sed -E 's/^.* up /up /; s/, *[0-9]+ users?.*$//'"
+        )
         facts.os = self._run(client, "sw_vers -productVersion")
         facts.cpu_model = self._run(client, "sysctl -n machdep.cpu.brand_string")
         facts.cpu_count = int(self._run(client, "sysctl -n hw.ncpu") or 0)
@@ -135,6 +142,31 @@ class SSHCollector:
         # Pending brew updates
         updates = self._run(client, "brew outdated 2>/dev/null | wc -l")
         facts.pending_updates = int(updates or 0)
+
+    def upgradable_packages(self) -> list[str]:
+        """Return the names of packages with pending updates."""
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            client.connect(
+                hostname=self.host,
+                username=self.user,
+                port=self.port,
+                timeout=self.timeout,
+                look_for_keys=True,
+                allow_agent=True,
+            )
+            if self.os_type == "macos":
+                out = self._run(
+                    client,
+                    'export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; brew outdated 2>/dev/null',
+                )
+                return [line.split()[0] for line in out.splitlines() if line.strip()]
+            self._run(client, "sudo apt-get update -qq >/dev/null 2>&1 || true")
+            out = self._run(client, "apt list --upgradable 2>/dev/null | tail -n +2")
+            return [line.split("/")[0] for line in out.splitlines() if line.strip()]
+        finally:
+            client.close()
 
     @staticmethod
     def _gb_from_human(value: str) -> float:
