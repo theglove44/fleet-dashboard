@@ -6,6 +6,7 @@ SSHes into each configured node and gathers system facts.
 from __future__ import annotations
 
 import platform
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -83,12 +84,12 @@ class SSHCollector:
 
             facts.hostname = self._run(client, "hostname")
             facts.arch = self._run(client, "uname -m")
-            facts.ip = self._run(client, "hostname -I | awk '{print $1}'")
-            facts.uptime = self._run(client, "uptime -p")
 
             if self.os_type == "macos":
                 self._collect_macos(client, facts)
             else:
+                facts.uptime = self._run(client, "uptime -p")
+                facts.ip = self._run(client, "hostname -I | awk '{print $1}'")
                 self._collect_linux(client, facts)
 
         finally:
@@ -121,9 +122,11 @@ class SSHCollector:
 
     def _collect_macos(self, client: paramiko.SSHClient, facts: NodeFacts) -> None:
         # macOS uptime lacks `uptime -p`; extract the "up ..." segment instead
-        facts.uptime = self._run(
+        raw = self._run(
             client, "uptime | sed -E 's/^.* up /up /; s/, *[0-9]+ users?.*$//'"
         )
+        facts.uptime = self._pretty_uptime(raw)
+        facts.ip = self._run(client, "ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1")
         facts.os = self._run(client, "sw_vers -productVersion")
         facts.cpu_model = self._run(client, "sysctl -n machdep.cpu.brand_string")
         facts.cpu_count = int(self._run(client, "sysctl -n hw.ncpu") or 0)
@@ -167,6 +170,22 @@ class SSHCollector:
             return [line.split("/")[0] for line in out.splitlines() if line.strip()]
         finally:
             client.close()
+
+    @staticmethod
+    def _pretty_uptime(raw: str) -> str:
+        """Rewrite macOS 'up 34 days, 21:57' in the style of Linux `uptime -p`."""
+        m = re.match(r"^up\s+(?:(\d+)\s+days?,\s*)?(\d+):(\d{2})$", raw.strip())
+        if not m:
+            return raw
+        d, h, mi = (int(g) if g else 0 for g in m.groups())
+        parts = []
+        if d:
+            parts.append(f"{d} day{'s' if d != 1 else ''}")
+        if h:
+            parts.append(f"{h} hour{'s' if h != 1 else ''}")
+        if mi or not (d or h):
+            parts.append(f"{mi} minute{'s' if mi != 1 else ''}")
+        return "up " + ", ".join(parts)
 
     @staticmethod
     def _gb_from_human(value: str) -> float:

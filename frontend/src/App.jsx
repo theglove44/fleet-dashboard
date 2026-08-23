@@ -1,72 +1,13 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import {
+  HEART_NAMES, HEART_POS, LAYOUT, MESH,
+  STATUS_COLOR, STATUS_LABEL, STATUS_SHORT,
+  nodeStatus, typeLabel, orbRadius, nodePos, osLabel,
+} from './layout'
 
-const HEART_NAMES = new Set(['controller', 'fleet-manager'])
-
-// ---- Node status semantics (state, not device type) ----
-function nodeStatus(node) {
-  if (!node.online) return 'offline'
-  if ((node.pending_updates || 0) > 0) return 'warn'
-  return 'ok'
-}
-
-// ---- Device type label ----
-function typeLabel(node) {
-  if (node.group === 'proxmox') return 'Proxmox'
-  if (node.group === 'vm') return 'VM'
-  if (node.os_type === 'macos') return 'macOS'
-  return 'Host'
-}
-
-function orbRadius(node) {
-  if (HEART_NAMES.has(node.name)) return 6
-  if (node.group === 'proxmox') return 5.4
-  if (node.group === 'vm') return 3.1
-  return 4.2
-}
-
-// ---- Constellation layout (hand-placed, keys must match config.yaml names) ----
-// The controller hub (mini-ubuntu) sits ON the HEART; the rest form a ring in
-// the same order as the MESH path, so peer edges hug the rim with no crossings.
-const HEART_POS = { x: 50, y: 48 }
-const LAYOUT = {
-  'mini-ubuntu':   { x: 50, y: 48 },
-  'stormbreaker':  { x: 50, y: 13 },
-  'macbook':       { x: 76, y: 23 },
-  'mediaserver':   { x: 85, y: 48 },
-  'proxmox-zen':   { x: 76, y: 73 },
-  'proxmox-lan':   { x: 50, y: 84 },
-  'tuckinandtalk': { x: 24, y: 73 },
-  'openclaw-1':    { x: 15, y: 48 },
-  'loki':          { x: 24, y: 23 },
-}
-const MESH = [
-  ['proxmox-zen', 'proxmox-lan'],
-  ['proxmox-zen', 'mini-ubuntu'],
-  ['proxmox-zen', 'mediaserver'],
-  ['proxmox-lan', 'tuckinandtalk'],
-  ['mini-ubuntu', 'mediaserver'],
-  ['mini-ubuntu', 'loki'],
-  ['loki', 'openclaw-1'],
-  ['openclaw-1', 'tuckinandtalk'],
-  ['macbook', 'mediaserver'],
-  ['macbook', 'mini-ubuntu'],
-  ['macbook', 'stormbreaker'],
-]
-
-const STATUS_COLOR = { ok: '#3fb950', warn: '#f0b429', offline: '#6b7280' }
-const STATUS_LABEL = { ok: 'Online', warn: 'Updates pending', offline: 'Offline' }
-const STATUS_SHORT = { ok: 'Online', warn: 'Updates', offline: 'Offline' }
-
-function nodePos(name, names) {
-  if (LAYOUT[name]) return LAYOUT[name]
-  const unknown = names.filter((n) => !LAYOUT[n])
-  const i = unknown.indexOf(name)
-  const n = Math.max(unknown.length, 1)
-  const angle = (2 * Math.PI * i) / n - Math.PI / 2
-  return { x: 50 + 38 * Math.cos(angle), y: 50 + 34 * Math.sin(angle) }
-}
+const Flythrough = lazy(() => import('./Flythrough'))
 
 function Constellation({ nodes, onSelect }) {
   const [hover, setHover] = useState(null)
@@ -165,11 +106,6 @@ function SummaryStrip({ nodes }) {
       </div>
     </div>
   )
-}
-
-// ---- PRETTY_NAME arrives quoted from os-release; strip quotes (also covers stale cache) ----
-function osLabel(node) {
-  return (node.os_version || node.os || '').replace(/"/g, '') || '—'
 }
 
 function relTime(iso) {
@@ -311,7 +247,7 @@ function tailOutput(text, lines = 16) {
 }
 
 // ---- Node detail popup (modal) ----
-function NodeDetail({ node, onClose, onNodes }) {
+function NodeDetail({ node, intent, onClose, onNodes }) {
   const status = nodeStatus(node)
   const isHeart = HEART_NAMES.has(node.name)
   const [showTerminal, setShowTerminal] = useState(false)
@@ -319,12 +255,23 @@ function NodeDetail({ node, onClose, onNodes }) {
   const [updateMsg, setUpdateMsg] = useState(null)
   const [confirmPkgs, setConfirmPkgs] = useState(null) // null | {loading} | {packages, error}
   const updating = localUpdating || !!node.updating
+  const bootedRef = useRef(false)
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  // launched from the fsn flyover: SSH cube opens the terminal,
+  // UPDATE cube opens the package-list confirm immediately
+  useEffect(() => {
+    if (bootedRef.current) return
+    bootedRef.current = true
+    if (intent === 'ssh') setShowTerminal(true)
+    else if (intent === 'update') startUpdate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Step 1: fetch the pending package list and show it for confirmation
   const startUpdate = async () => {
@@ -609,7 +556,8 @@ function App() {
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [toast, setToast] = useState(null)
-  const [selected, setSelected] = useState(null)
+  const [selected, setSelected] = useState(null) // {name, intent: 'ssh'|'update'|null}
+  const [flyover, setFlyover] = useState(false)
 
   const fetchNodes = useCallback(async () => {
     try {
@@ -670,7 +618,7 @@ function App() {
   const anyOffline = online < nodes.length
 
   const selectedNode = useMemo(
-    () => nodes.find((n) => n.name === selected) || null,
+    () => nodes.find((n) => n.name === selected?.name) || null,
     [nodes, selected]
   )
 
@@ -707,11 +655,16 @@ function App() {
         <SummaryStrip nodes={nodes} />
 
         <div className="constellation-panel">
-          <div className="panel-title">Network · size by role · click a node for details</div>
+          <div className="panel-title-row">
+            <span className="panel-title">Network · size by role · click a node for details</span>
+            <button className="btn ghost flyover-btn" onClick={() => setFlyover(true)}>
+              ✦ Flyover
+            </button>
+          </div>
           {loading ? (
             <div className="constellation-loading">Charting the sky…</div>
           ) : (
-            <Constellation nodes={nodes} onSelect={(n) => setSelected(n.name)} />
+            <Constellation nodes={nodes} onSelect={(n) => setSelected({ name: n.name })} />
           )}
           <div className="constellation-legend">
             <span className="legend-item"><span className="legend-dot ok" /> Online</span>
@@ -722,15 +675,30 @@ function App() {
         </div>
 
         {!loading && (
-          <NodeTable nodes={nodes} onSelect={(n) => setSelected(n.name)} />
+          <NodeTable nodes={nodes} onSelect={(n) => setSelected({ name: n.name })} />
         )}
 
         {error && <div className="error-banner">{error}</div>}
         {toast && <div className="error-banner" style={{ borderColor: toast.type === 'error' ? 'var(--danger)' : 'var(--ok)' }}>{toast.msg}</div>}
       </main>
 
+      {flyover && (
+        <Suspense fallback={null}>
+          <Flythrough
+            nodes={nodes}
+            onSelect={(name, intent) => setSelected({ name, intent })}
+            onClose={() => setFlyover(false)}
+          />
+        </Suspense>
+      )}
+
       {selectedNode && (
-        <NodeDetail node={selectedNode} onClose={() => setSelected(null)} onNodes={setNodes} />
+        <NodeDetail
+          node={selectedNode}
+          intent={selected?.intent || null}
+          onClose={() => setSelected(null)}
+          onNodes={setNodes}
+        />
       )}
     </div>
   )

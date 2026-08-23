@@ -350,6 +350,180 @@ body {
   white-space: pre-wrap;
 }
 
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-3);
+}
+.panel-title-row .panel-title { margin-bottom: 0; }
+.flyover-btn { padding: var(--sp-1) var(--sp-3); font-size: 0.8rem; }
+
+/* ---- Three.js flyover ---- */
+.flyover {
+  position: fixed;
+  inset: 0;
+  z-index: 90; /* below modal-overlay (100) so the detail modal opens on top */
+  background: var(--bg-0);
+}
+.flyover-scene {
+  position: absolute;
+  inset: 0;
+}
+.flyover-scene canvas { display: block; }
+.flyover-hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-6);
+  z-index: 2;
+  /* the bar itself must never intercept clicks meant for the canvas —
+     only its buttons are clickable */
+  pointer-events: none;
+}
+.flyover-hud button { pointer-events: auto; }
+
+/* fixed bottom strip: node name / OS / arch / actions — screen-space, so it
+   can never lose a depth fight with world geometry */
+.flyover-infobar {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 8px 14px;
+  background: rgba(7, 10, 16, 0.82);
+  border: 1px solid rgba(255, 90, 210, 0.35);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  z-index: 2;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+.flyover-infobar .fi-name {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-1);
+}
+.flyover-infobar .fi-meta { color: var(--text-3); }
+.flyover-infobar.off .fi-name,
+.flyover-infobar.off .fi-meta { color: #6b7280; }
+.flyover-infobar .fi-actions { display: flex; gap: var(--sp-2); }
+.flyover-infobar .fi-actions button {
+  pointer-events: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 5px 10px;
+  cursor: pointer;
+  background: transparent;
+  color: #ff9de4;
+  border: 1px solid rgba(255, 90, 210, 0.55);
+  border-radius: 4px;
+}
+.flyover-infobar .fi-actions button:hover:not(:disabled) {
+  background: rgba(255, 90, 210, 0.15);
+}
+.flyover-infobar .fi-actions button.danger {
+  color: #ffd98a;
+  border-color: rgba(240, 180, 41, 0.55);
+}
+.flyover-infobar .fi-actions button.danger:hover:not(:disabled) {
+  background: rgba(240, 180, 41, 0.15);
+}
+.flyover-infobar .fi-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.flyover-title {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.flyover-title span { color: var(--accent); }
+.flyover-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  margin-right: auto;
+}
+.flyover-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6);
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-align: center;
+}
+.flyover-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: rgba(255, 218, 250, 0.9);
+  box-shadow: 0 0 8px #ff5ad2;
+  pointer-events: none;
+  z-index: 2;
+}
+.flyover-lockhint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  text-align: center;
+  z-index: 1;
+  pointer-events: none; /* clicks fall through to the canvas to grab the mouse */
+}
+.flyover-lockhint-big {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #ffb7ef;
+  text-shadow: 0 0 24px rgba(255, 90, 210, 0.45);
+}
+.flyover-lockhint-sub {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.7;
+}
+.flyover-lockhint-keys {
+  display: flex;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.flyover-lockhint-keys b { color: var(--text-1); font-weight: 600; }
+.flyover-speed {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  margin-right: auto;
+}
+.flyover-speed.dim { opacity: 0.75; }
+
 /* ---- Node table ---- */
 .node-table-panel {
   background: var(--bg-1);
