@@ -51,6 +51,7 @@ export const MESH = [
   ['mini-ubuntu', 'mediaserver'],
   ['mini-ubuntu', 'loki'],
   ['loki', 'openclaw-1'],
+  ['loki', 'stormbreaker'],
   ['openclaw-1', 'tuckinandtalk'],
   ['macbook', 'mediaserver'],
   ['macbook', 'mini-ubuntu'],
