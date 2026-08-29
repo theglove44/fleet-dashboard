@@ -103,7 +103,7 @@ def collect_one(node: NodeConfig) -> dict[str, Any]:
             "group": node.group,
             "os_type": node.os,
             "online": False,
-            "error": str(e),
+            "error": str(e) or type(e).__name__,
         }
 
 

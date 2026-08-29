@@ -129,6 +129,11 @@ This section documents problems encountered and their solutions. Add to it whene
     - **Fix:** Hand-place the real names. Unknown nodes fall back to a circle around the HEART so a new config entry still renders.
     - **Lesson:** If a node is in config but invisible on the sky, the layout map is stale — do not filter unknown names.
 
+19. **Inventory collect must not treat a hung `apt-get update` as offline.**
+    - **Problem:** Collect ran `sudo apt-get update` on every Linux node. Paramiko's 10s channel timeout fired on openclaw-1 (`TimeoutError()` stringifies empty), so a reachable box showed offline with a blank error.
+    - **Fix:** Count pending updates from cached apt lists during inventory. Refresh lists only in `upgradable_packages()` (the confirm dialog). Close stdin after `exec_command`. If `str(e)` is empty, store `type(e).__name__`.
+    - **Lesson:** SSH working plus a timeout on the updates probe is not "offline". Don't fail the whole collect on that command.
+
 ---
 
 ## End-to-End Testing (run after each turn of development)

@@ -63,7 +63,8 @@ class SSHCollector:
 
     def _run(self, client: paramiko.SSHClient, command: str) -> str:
         """Run a command and return stdout, stripped."""
-        _stdin, stdout, stderr = client.exec_command(command, timeout=self.timeout)
+        stdin, stdout, stderr = client.exec_command(command, timeout=self.timeout)
+        stdin.channel.shutdown_write()
         out = stdout.read().decode().strip()
         err = stderr.read().decode().strip()
         return out or err
@@ -115,10 +116,14 @@ class SSHCollector:
             facts.disk_total_gb = self._gb_from_human(disk[0])
             facts.disk_used_gb = self._gb_from_human(disk[1])
 
-        # Pending apt updates
-        self._run(client, "sudo apt-get update -qq >/dev/null 2>&1 || true")
-        updates = self._run(client, "apt list --upgradable 2>/dev/null | tail -n +2 | wc -l")
-        facts.pending_updates = int(updates or 0)
+        # Count from cached lists. Do not apt-get update here: paramiko's 10s
+        # channel timeout fires on that command (openclaw-1) and used to mark
+        # a reachable node offline. Refresh lists in upgradable_packages().
+        try:
+            updates = self._run(client, "apt list --upgradable 2>/dev/null | tail -n +2 | wc -l")
+            facts.pending_updates = int(updates or 0)
+        except Exception:
+            facts.pending_updates = 0
 
     def _collect_macos(self, client: paramiko.SSHClient, facts: NodeFacts) -> None:
         # macOS uptime lacks `uptime -p`; extract the "up ..." segment instead
