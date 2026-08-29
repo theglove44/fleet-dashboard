@@ -118,7 +118,7 @@ export default function Flythrough({ nodes, onSelect, onClose }) {
     const camera = new THREE.PerspectiveCamera(
       62, mount.clientWidth / mount.clientHeight, 0.1, 1600
     )
-    // spawn high enough that proxmox-lan's tower doesn't hide mini-ubuntu /
+    // spawn high enough that proxmox-lan's tower doesn't hide the HEART /
     // stormbreaker behind it (~34° down instead of ~7°)
     camera.position.set(0, 118, 172)
     camera.lookAt(0, 6, 0)

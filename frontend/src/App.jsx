@@ -20,6 +20,7 @@ function Constellation({ nodes, onSelect }) {
   }, [nodes])
 
   const spokeLines = names.map((name) => {
+    if (HEART_NAMES.has(name)) return null
     const p = posOf(name)
     const active = hover === name
     return (

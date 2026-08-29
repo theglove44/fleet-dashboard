@@ -29,33 +29,31 @@ export function orbRadius(node) {
 }
 
 // Hand-placed sky coords (0-100), keys must match config.yaml names.
-// The controller hub (mini-ubuntu) sits ON the HEART; the rest form a ring in
-// the same order as the MESH path, so peer edges hug the rim with no crossings.
+// fleet-manager (the dashboard VM) sits ON the HEART. The other nodes form a
+// 9-node ring in MESH order so peer edges hug the rim with no crossings.
 export const HEART_POS = { x: 50, y: 48 }
 export const LAYOUT = {
-  'mini-ubuntu':   { x: 50, y: 48 },
+  'fleet-manager': { x: 50, y: 48 },
   'stormbreaker':  { x: 50, y: 13 },
-  'macbook':       { x: 76, y: 23 },
-  'mediaserver':   { x: 85, y: 48 },
-  'proxmox-zen':   { x: 76, y: 73 },
-  'proxmox-lan':   { x: 50, y: 84 },
-  'tuckinandtalk': { x: 24, y: 73 },
-  'openclaw-1':    { x: 15, y: 48 },
-  'loki':          { x: 24, y: 23 },
+  'macbook':       { x: 73, y: 21 },
+  'mediaserver':   { x: 85, y: 42 },
+  'proxmox-zen':   { x: 81, y: 66 },
+  'proxmox-lan':   { x: 62, y: 81 },
+  'tuckinandtalk': { x: 38, y: 81 },
+  'openclaw-1':    { x: 19, y: 66 },
+  'loki':          { x: 15, y: 42 },
+  'mini-ubuntu':   { x: 27, y: 21 },
 }
 export const MESH = [
-  ['proxmox-zen', 'proxmox-lan'],
-  ['proxmox-zen', 'mini-ubuntu'],
-  ['proxmox-zen', 'mediaserver'],
-  ['proxmox-lan', 'tuckinandtalk'],
-  ['mini-ubuntu', 'mediaserver'],
-  ['mini-ubuntu', 'loki'],
-  ['loki', 'openclaw-1'],
-  ['loki', 'stormbreaker'],
-  ['openclaw-1', 'tuckinandtalk'],
+  ['stormbreaker', 'macbook'],
   ['macbook', 'mediaserver'],
-  ['macbook', 'mini-ubuntu'],
-  ['macbook', 'stormbreaker'],
+  ['mediaserver', 'proxmox-zen'],
+  ['proxmox-zen', 'proxmox-lan'],
+  ['proxmox-lan', 'tuckinandtalk'],
+  ['tuckinandtalk', 'openclaw-1'],
+  ['openclaw-1', 'loki'],
+  ['loki', 'mini-ubuntu'],
+  ['mini-ubuntu', 'stormbreaker'],
 ]
 
 export const STATUS_COLOR = { ok: '#3fb950', warn: '#f0b429', offline: '#6b7280' }
