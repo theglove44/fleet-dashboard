@@ -19,6 +19,7 @@ set -u
 
 DRY_RUN=0
 DO_LOCAL=1
+MACHINE_OUTPUT=0
 ONLY_HOSTS=""
 SSH_CONFIG="${SSH_CONFIG:-$HOME/.ssh/config}"
 SKIP_HOSTS="${SKIP_HOSTS:-github.com gitlab.com bitbucket.org}"
@@ -27,6 +28,7 @@ for arg in "$@"; do
   case "$arg" in
     --dry-run)  DRY_RUN=1 ;;
     --no-local) DO_LOCAL=0 ;;
+    --machine-output) MACHINE_OUTPUT=1 ;;
     -h|--help)  sed -n '2,16p' "$0"; exit 0 ;;
     -*)         echo "Unknown option: $arg" >&2; exit 2 ;;
     *)          ONLY_HOSTS="$ONLY_HOSTS $arg" ;;
@@ -247,7 +249,7 @@ if [ "$DRY_RUN" = "1" ]; then MODE="dry run"; else MODE="live run"; fi
       printf "TOOL|%s|%s|%s|%s|%s|%s|%s\n" "$disp" "$tool" "$inst" "$method" "$before" "$status" "$after"
     done
   done
-} | awk -v color="$USE_COLOR" -v dry="$DRY_RUN" -v mode="$MODE" \
+} | awk -v color="$USE_COLOR" -v dry="$DRY_RUN" -v mode="$MODE" -v machine="$MACHINE_OUTPUT" \
         -v title="FLEET AGENT UPDATE" \
         -v g_bar="$(printf '\342\224\200')" -v g_behind="$(printf '\342\226\276')" \
         -v g_ok="$(printf '\342\234\223')" -v g_fail="$(printf '\342\234\227')" \
@@ -364,6 +366,21 @@ END {
     }
   }
   printf "\n"
+  if (machine) {
+    printf "@@AGENT_DATA_BEGIN@@\n"
+    for (i = 1; i <= nh; i++) {
+      h = hosts[i]
+      if (state[h] != "ok") {
+        printf "AGENT_HOST|%s|bad|%s\n", h, reason[h]
+        continue
+      }
+      printf "AGENT_HOST|%s|ok|\n", h
+      for (j = 1; j <= nt; j++) {
+        t = tools[j]
+        printf "AGENT_TOOL|%s|%s|%s|%s|%s|%s|%s|%s|%s\n", h, t, inst[h,t], method[h,t], before[h,t], status[h,t], after[h,t], ver[h,t], cls[h,t]
+      }
+    }
+  }
 }'
 
 echo "  Full per-host output: $LOG_DIR/<host>.log"

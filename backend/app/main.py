@@ -205,6 +205,37 @@ _agent_update_state: dict[str, Any] = {
 }
 
 
+def _parse_agent_report(output: str) -> tuple[str, list[dict[str, Any]], dict[str, int]]:
+    """Separate the human report from the script's structured host/tool rows."""
+    marker = "@@AGENT_DATA_BEGIN@@"
+    if marker not in output:
+        return output.strip(), [], {}
+    report, data = output.split(marker, 1)
+    hosts: dict[str, dict[str, Any]] = {}
+    for line in data.splitlines():
+        fields = line.split("|")
+        if fields[0] == "AGENT_HOST" and len(fields) >= 4:
+            hosts[fields[1]] = {"name": fields[1], "reachable": fields[2] == "ok", "error": fields[3], "tools": []}
+        elif fields[0] == "AGENT_TOOL" and len(fields) == 10:
+            _, host, name, installed, method, before, update, after, version, state = fields
+            hosts.setdefault(host, {"name": host, "reachable": True, "error": "", "tools": []})["tools"].append({
+                "name": name, "installed": installed == "yes", "method": method,
+                "before": before, "update": update, "after": after,
+                "version": version, "state": state,
+            })
+    rows = list(hosts.values())
+    tools = [tool for host in rows for tool in host["tools"]]
+    summary = {
+        "reachable": sum(h["reachable"] for h in rows),
+        "hosts": len(rows),
+        "installed": sum(t["installed"] for t in tools),
+        "behind": sum(t["state"] == "behind" for t in tools),
+        "updated": sum(t["state"] == "ok" for t in tools),
+        "problems": sum(t["state"] in ("fail", "skip") for t in tools) + sum(not h["reachable"] for h in rows),
+    }
+    return report.strip(), rows, summary
+
+
 def _run_agent_update(dry_run: bool) -> dict[str, Any]:
     """Run the version-controlled fleet agent script from the MacBook."""
     node = next((n for n in load_config() if n.name == "macbook"), None)
@@ -224,13 +255,18 @@ def _run_agent_update(dry_run: bool) -> dict[str, Any]:
             look_for_keys=True,
             allow_agent=True,
         )
-        command = "bash -s -- --dry-run" if dry_run else "bash -s"
+        args = "--machine-output --dry-run" if dry_run else "--machine-output"
+        command = f"bash -s -- {args}"
         stdin, stdout, stderr = client.exec_command(command, timeout=900)
         stdin.write(script)
         stdin.channel.shutdown_write()
-        out = stdout.read().decode("utf-8", errors="replace")
+        raw_output = stdout.read().decode("utf-8", errors="replace")
         err = stderr.read().decode("utf-8", errors="replace")
-        return {"exit_code": stdout.channel.recv_exit_status(), "output": out, "error_output": err}
+        out, hosts, summary = _parse_agent_report(raw_output)
+        return {
+            "exit_code": stdout.channel.recv_exit_status(), "output": out,
+            "error_output": err, "hosts": hosts, "summary": summary,
+        }
     finally:
         client.close()
 

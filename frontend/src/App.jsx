@@ -558,6 +558,19 @@ function SSHTerminal({ node }) {
   )
 }
 
+const AGENT_TOOL_COLUMNS = [
+  ['claude', 'Claude Code'], ['codex', 'Codex'], ['pi', 'Pi'], ['grok', 'Grok Build'],
+]
+
+function agentCellLabel(cell, dryRun) {
+  if (!cell?.installed) return 'Not installed'
+  if (cell.state === 'behind') return 'Behind fleet'
+  if (cell.state === 'fail') return cell.update || 'Update failed'
+  if (cell.state === 'skip') return 'No update path'
+  if (cell.state === 'ok') return 'Updated'
+  return dryRun ? 'At fleet version' : 'Already current'
+}
+
 function AgentUpdatePanel({ nodes }) {
   const [run, setRun] = useState(null)
   const [confirmUpdate, setConfirmUpdate] = useState(false)
@@ -618,7 +631,7 @@ function AgentUpdatePanel({ nodes }) {
           </div>
         </div>
         <span className={`agent-state ${running ? 'running' : run?.status === 'complete' ? 'complete' : run?.status === 'failed' ? 'failed' : ''}`}>
-          {running ? 'Running' : run?.status === 'complete' ? (run.dry_run ? 'Preview complete' : 'Run complete') : run?.status === 'failed' ? 'Failed' : 'Ready'}
+          {running ? 'Running' : run?.status === 'complete' ? (run.dry_run ? 'Preview complete' : (run.summary?.problems ? 'Review results' : 'Run complete')) : run?.status === 'failed' ? 'Failed' : 'Ready'}
         </span>
       </div>
       <p className="agent-description">
@@ -663,11 +676,54 @@ function AgentUpdatePanel({ nodes }) {
       {run?.finished_at && (
         <div className="agent-run-meta">
           {run.dry_run ? 'Preview' : 'Update run'} · finished {relTime(run.finished_at)}
-          {run.exit_code !== undefined && ` · exit ${run.exit_code}`}
+        </div>
+      )}
+      {run?.summary && (
+        <div className="agent-summary">
+          <div><strong>{run.summary.reachable}/{run.summary.hosts}</strong><span>Reachable</span></div>
+          <div><strong>{run.summary.installed}</strong><span>Tools found</span></div>
+          <div className={run.summary.behind ? 'warn' : ''}><strong>{run.summary.behind}</strong><span>Behind fleet</span></div>
+          <div className={run.summary.problems ? 'err' : ''}><strong>{run.summary.problems}</strong><span>Needs attention</span></div>
+        </div>
+      )}
+      {run?.hosts?.length > 0 && (
+        <div className="agent-table-wrap">
+          <table className="agent-table">
+            <thead>
+              <tr><th>Host</th>{AGENT_TOOL_COLUMNS.map(([key, label]) => <th key={key}>{label}</th>)}</tr>
+            </thead>
+            <tbody>
+              {run.hosts.map((host) => (
+                <tr key={host.name} className={!host.reachable ? 'unreachable' : ''}>
+                  <th scope="row">
+                    <span className={`agent-host-dot ${host.reachable ? 'online' : ''}`} />
+                    <span>{host.name}</span>
+                  </th>
+                  {!host.reachable ? (
+                    <td colSpan={AGENT_TOOL_COLUMNS.length} className="agent-host-unreachable">{host.error || 'Host unreachable'}</td>
+                  ) : AGENT_TOOL_COLUMNS.map(([key]) => {
+                    const cell = host.tools.find((tool) => tool.name === key)
+                    return (
+                      <td key={key}>
+                        <div className={`agent-cell ${cell?.state || 'none'}`}>
+                          <strong>{cell?.installed ? (cell.version || cell.before || 'Unknown') : '—'}</strong>
+                          <span>{agentCellLabel(cell, run.dry_run)}</span>
+                          {cell?.installed && <small>{cell.method}</small>}
+                        </div>
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
       {(run?.output || run?.error_output) && (
-        <pre className="agent-output" aria-live="polite">{[run.output, run.error_output].filter(Boolean).join('\n')}</pre>
+        <details className="agent-raw">
+          <summary>Raw script report and per-host log location</summary>
+          <pre className="agent-output">{[run.output, run.error_output].filter(Boolean).join('\n')}</pre>
+        </details>
       )}
     </section>
   )
