@@ -5,6 +5,9 @@ export const HEART_NAMES = new Set(['controller', 'fleet-manager'])
 
 export function nodeStatus(node) {
   if (!node.online) return 'offline'
+  const collectedAt = node.collected_at || node.last_seen
+  const age = collectedAt ? Date.now() - new Date(collectedAt).getTime() : Infinity
+  if (!Number.isFinite(age) || age < 0 || age > 15 * 60 * 1000) return 'stale'
   if ((node.pending_updates || 0) > 0) return 'warn'
   return 'ok'
 }
@@ -56,9 +59,9 @@ export const MESH = [
   ['mini-ubuntu', 'stormbreaker'],
 ]
 
-export const STATUS_COLOR = { ok: '#3fb950', warn: '#f0b429', offline: '#6b7280' }
-export const STATUS_LABEL = { ok: 'Online', warn: 'Updates pending', offline: 'Offline' }
-export const STATUS_SHORT = { ok: 'Online', warn: 'Updates', offline: 'Offline' }
+export const STATUS_COLOR = { ok: '#3fb950', warn: '#f0b429', offline: '#6b7280', stale: '#8b95a7' }
+export const STATUS_LABEL = { ok: 'Online', warn: 'Updates pending', offline: 'Offline', stale: 'Stale — refresh needed' }
+export const STATUS_SHORT = { ok: 'Online', warn: 'Updates', offline: 'Offline', stale: 'Stale' }
 
 export function nodePos(name, names) {
   if (LAYOUT[name]) return LAYOUT[name]

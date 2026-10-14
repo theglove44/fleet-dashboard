@@ -200,6 +200,7 @@ body {
 .legend-dot.ok { background: var(--ok); }
 .legend-dot.warn { background: var(--warn); }
 .legend-dot.offline { background: var(--offline); }
+.legend-dot.stale { background: #8b95a7; }
 .legend-line { color: var(--text-3); opacity: 0.6; }
 
 .constellation .heart { color: var(--accent); }
@@ -612,6 +613,8 @@ body {
 .status-cell.warn .dot { background: var(--warn); }
 .status-cell.offline .dot { background: var(--offline); }
 .status-cell.offline { color: var(--text-3); }
+.status-cell.stale .dot { background: #8b95a7; }
+.status-cell.stale { color: #aab3c5; }
 .empty-row {
   text-align: center;
   color: var(--text-3);

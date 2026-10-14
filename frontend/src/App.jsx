@@ -126,7 +126,7 @@ function NodeTable({ nodes, onSelect }) {
   const [sortDir, setSortDir] = useState(-1)
   const [filter, setFilter] = useState('all')
 
-  const severity = { offline: 0, ok: 1, warn: 2 }
+  const severity = { offline: 0, stale: 1, ok: 2, warn: 3 }
   const columns = [
     { key: 'name', label: 'Name' },
     { key: 'role', label: 'Role' },
@@ -149,6 +149,7 @@ function NodeTable({ nodes, onSelect }) {
     if (filter === 'online') list = nodes.filter((n) => n.online)
     else if (filter === 'warn') list = nodes.filter((n) => nodeStatus(n) === 'warn')
     else if (filter === 'offline') list = nodes.filter((n) => !n.online)
+    else if (filter === 'stale') list = nodes.filter((n) => nodeStatus(n) === 'stale')
     return [...list].sort((a, b) => {
       const va = sortValue[sortKey](a)
       const vb = sortValue[sortKey](b)
@@ -172,6 +173,7 @@ function NodeTable({ nodes, onSelect }) {
     ['online', `Online (${nodes.filter((n) => n.online).length})`],
     ['warn', `Updates (${nodes.filter((n) => nodeStatus(n) === 'warn').length})`],
     ['offline', `Offline (${nodes.filter((n) => !n.online).length})`],
+    ['stale', `Stale (${nodes.filter((n) => nodeStatus(n) === 'stale').length})`],
   ]
 
   return (
@@ -555,7 +557,6 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [collecting, setCollecting] = useState(false)
   const [error, setError] = useState(null)
-  const [lastUpdated, setLastUpdated] = useState(null)
   const [toast, setToast] = useState(null)
   const [selected, setSelected] = useState(null) // {name, intent: 'ssh'|'update'|null}
   const [flyover, setFlyover] = useState(false)
@@ -578,22 +579,34 @@ function App() {
     try {
       const res = await fetch('/api/collect?t=' + Date.now(), { method: 'POST' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      // Collection is async now; poll for results
+      // Poll the run state, not cached node values: cached results may be old.
+      const runId = (await res.json()).run_id
       let attempts = 0
       const poll = async () => {
-        const r = await fetch('/api/nodes')
-        const d = await r.json()
-        setNodes(d.nodes || [])
-        const nodes = d.nodes || []
-        const collected = nodes.filter((n) => n.online || n.error).length
-        attempts += 1
-        if (collected === nodes.length || attempts >= 8) {
+        try {
+          const [statusRes, nodesRes] = await Promise.all([
+            fetch('/api/collect/status'),
+            fetch('/api/nodes'),
+          ])
+          if (!statusRes.ok || !nodesRes.ok) throw new Error('Could not check collection progress')
+          const status = await statusRes.json()
+          const data = await nodesRes.json()
+          setNodes(data.nodes || [])
+          attempts += 1
+          if (status.run_id !== runId) throw new Error('Collection run was replaced')
+          if (status.status === 'complete') {
+            setCollecting(false)
+            setToast({ type: 'ok', msg: `Collected ${status.completed}/${status.total} nodes` })
+            setTimeout(() => setToast(null), 3000)
+          } else if (status.status === 'failed' || attempts >= 180) {
+            throw new Error(status.error || 'Collection timed out')
+          } else {
+            setTimeout(poll, 2000)
+          }
+        } catch (e) {
+          setError(e.message || 'Collection failed')
+          setToast({ type: 'error', msg: e.message || 'Collection failed' })
           setCollecting(false)
-          setLastUpdated(new Date())
-          setToast({ type: 'ok', msg: `Collected ${collected}/${nodes.length} nodes` })
-          setTimeout(() => setToast(null), 3000)
-        } else {
-          setTimeout(poll, 2000)
         }
       }
       poll()
@@ -617,6 +630,11 @@ function App() {
 
   const online = nodes.filter((n) => n.online).length
   const anyOffline = online < nodes.length
+  const latestCollectedAt = nodes
+    .map((n) => n.collected_at || n.last_seen)
+    .filter(Boolean)
+    .sort()
+    .at(-1)
 
   const selectedNode = useMemo(
     () => nodes.find((n) => n.name === selected?.name) || null,
@@ -635,10 +653,8 @@ function App() {
             <span className={`dot ${anyOffline ? 'warn' : 'ok'}`} />
             {online}/{nodes.length} online
           </span>
-          {lastUpdated && (
-            <span className="last-updated">
-              updated {Math.max(1, Math.round((Date.now() - lastUpdated.getTime()) / 60000))}m ago
-            </span>
+          {latestCollectedAt && (
+            <span className="last-updated">checked {relTime(latestCollectedAt)}</span>
           )}
           <button className="btn" onClick={collect} disabled={collecting}>
             {collecting && <span className="spinner" />}
@@ -671,6 +687,7 @@ function App() {
             <span className="legend-item"><span className="legend-dot ok" /> Online</span>
             <span className="legend-item"><span className="legend-dot warn" /> Updates</span>
             <span className="legend-item"><span className="legend-dot offline" /> Offline</span>
+            <span className="legend-item"><span className="legend-dot stale" /> Stale</span>
             <span className="legend-item"><span className="legend-line">——</span> Tailscale mesh</span>
           </div>
         </div>

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,15 +49,25 @@ def _load_cache() -> dict[str, dict[str, Any]]:
 
 def _save_cache(cache: dict[str, dict[str, Any]]) -> None:
     """Persist the cache to disk."""
+    temp_file = CACHE_FILE.with_name(f"{CACHE_FILE.name}.{uuid.uuid4().hex}.tmp")
     try:
-        with open(CACHE_FILE, "w") as f:
+        with open(temp_file, "w") as f:
             json.dump(cache, f, indent=2)
+        os.replace(temp_file, CACHE_FILE)
     except OSError:
-        pass
+        try:
+            temp_file.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 # In-memory cache of the last collected facts per node (loaded from disk)
 _cache: dict[str, dict[str, Any]] = _load_cache()
+_collection_state: dict[str, Any] = {"status": "idle", "run_id": None, "started_at": None, "finished_at": None}
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 class NodeConfig(BaseModel):
@@ -68,19 +79,24 @@ class NodeConfig(BaseModel):
     group: str = "host"
 
 
-def load_config(path: str = "config.yaml") -> list[NodeConfig]:
-    """Load node config from YAML."""
+CONFIG_FILE = Path(__file__).resolve().parent.parent / "config.yaml"
+
+
+def load_config(path: str | Path | None = None) -> list[NodeConfig]:
+    """Load node config from its project path, independent of the process cwd."""
     try:
-        with open(path) as f:
+        with open(path or CONFIG_FILE) as f:
             data = yaml.safe_load(f)
         return [NodeConfig(**n) for n in data.get("nodes", [])]
-    except FileNotFoundError:
-        return []
+    except FileNotFoundError as e:
+        config_path = path or CONFIG_FILE
+        raise FileNotFoundError(f"Node configuration not found: {config_path}") from e
 
 
 def collect_one(node: NodeConfig) -> dict[str, Any]:
     """Collect facts for a single node."""
     collector = SSHCollector(node.host, node.user, node.os, port=node.port)
+    collected_at = _utc_now()
     try:
         facts = collector.collect()
         return {
@@ -91,7 +107,8 @@ def collect_one(node: NodeConfig) -> dict[str, Any]:
             "group": node.group,
             "os_type": node.os,
             "online": True,
-            "last_seen": None,  # Phase 2 adds timestamps
+            "last_seen": collected_at,
+            "collected_at": collected_at,
             **facts.to_dict(),
         }
     except Exception as e:  # noqa: BLE001
@@ -103,6 +120,8 @@ def collect_one(node: NodeConfig) -> dict[str, Any]:
             "group": node.group,
             "os_type": node.os,
             "online": False,
+            "last_seen": collected_at,
+            "collected_at": collected_at,
             "error": str(e) or type(e).__name__,
         }
 
@@ -128,31 +147,51 @@ async def get_nodes() -> dict[str, Any]:
     return {"nodes": results}
 
 
+@app.get("/api/collect/status")
+async def get_collection_status() -> dict[str, Any]:
+    """Return the state of the most recent collection run."""
+    return dict(_collection_state)
+
+
 @app.post("/api/collect")
 async def collect_all() -> dict[str, Any]:
     """Kick off collection from all nodes (runs SSH in parallel, async).
 
     Returns immediately with 202; the frontend polls /api/nodes for results.
     """
+    global _collection_state
+    if _collection_state["status"] == "running":
+        return {**_collection_state, "collecting": True}
+
     nodes = load_config()
+    run_id = str(uuid.uuid4())
+    _collection_state = {
+        "status": "running", "run_id": run_id, "started_at": _utc_now(),
+        "finished_at": None, "total": len(nodes), "completed": 0,
+    }
 
     async def _run() -> None:
-        with ThreadPoolExecutor(max_workers=len(nodes) or 1) as pool:
-            loop = asyncio.get_event_loop()
-            futures = [loop.run_in_executor(pool, collect_one, node) for node in nodes]
-            results = await asyncio.gather(*futures)
-        for result in results:
-            # Merge fresh facts but preserve last_update (collect should not wipe update results)
-            prev = _cache.get(result["name"], {})
-            _cache[result["name"]] = {
-                **result,
-                "last_update": prev.get("last_update"),
-                "updating": prev.get("updating"),
-            }
-        _save_cache(_cache)
+        global _collection_state
+        try:
+            with ThreadPoolExecutor(max_workers=len(nodes) or 1) as pool:
+                loop = asyncio.get_running_loop()
+                futures = [loop.run_in_executor(pool, collect_one, node) for node in nodes]
+                results = await asyncio.gather(*futures)
+            for result in results:
+                # Merge fresh facts but preserve last_update (collect should not wipe update results)
+                prev = _cache.get(result["name"], {})
+                _cache[result["name"]] = {
+                    **result,
+                    "last_update": prev.get("last_update"),
+                    "updating": prev.get("updating"),
+                }
+            _save_cache(_cache)
+            _collection_state = {**_collection_state, "status": "complete", "completed": len(results), "finished_at": _utc_now()}
+        except Exception as e:  # noqa: BLE001
+            _collection_state = {**_collection_state, "status": "failed", "error": str(e), "finished_at": _utc_now()}
 
     asyncio.create_task(_run())
-    return {"status": "started", "collecting": True}
+    return {**_collection_state, "collecting": True}
 
 
 @app.get("/health")
@@ -206,7 +245,6 @@ async def update_node(node_name: str) -> dict[str, Any]:
 
 
 # ---- Serve built frontend (production) ----
-from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
