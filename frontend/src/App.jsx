@@ -558,6 +558,121 @@ function SSHTerminal({ node }) {
   )
 }
 
+function AgentUpdatePanel({ nodes }) {
+  const [run, setRun] = useState(null)
+  const [confirmUpdate, setConfirmUpdate] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState(null)
+  const macbook = nodes.find((n) => n.name === 'macbook')
+  const running = run?.status === 'running'
+
+  useEffect(() => {
+    let cancelled = false
+    let timer
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/agent-updater/status')
+        const data = await res.json()
+        if (cancelled) return
+        setRun(data)
+        if (data.status === 'running') timer = setTimeout(poll, 2000)
+      } catch {
+        if (!cancelled) {
+          setError('Could not read agent updater status')
+          timer = setTimeout(poll, 2000)
+        }
+      }
+    }
+    poll()
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [run?.status, run?.run_id])
+
+  const startRun = async (dryRun) => {
+    setStarting(true)
+    setError(null)
+    setConfirmUpdate(false)
+    try {
+      const res = await fetch('/api/agent-updater/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dry_run: dryRun }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`)
+      setRun(data)
+    } catch (e) {
+      setError(e.message || 'Could not start agent update')
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  return (
+    <section className="agent-panel">
+      <div className="agent-panel-head">
+        <div className="agent-heading">
+          <span className="agent-mark">⌘</span>
+          <div>
+            <div className="agent-kicker">Fleet maintenance</div>
+            <h2>Agent toolchain</h2>
+          </div>
+        </div>
+        <span className={`agent-state ${running ? 'running' : run?.status === 'complete' ? 'complete' : run?.status === 'failed' ? 'failed' : ''}`}>
+          {running ? 'Running' : run?.status === 'complete' ? (run.dry_run ? 'Preview complete' : 'Run complete') : run?.status === 'failed' ? 'Failed' : 'Ready'}
+        </span>
+      </div>
+      <p className="agent-description">
+        Inspect and update Claude Code, Codex, Pi and Grok Build using the version-controlled MacBook fleet script.
+        It runs locally on MacBook and follows that Mac’s SSH host list.
+      </p>
+      <div className="agent-tools" aria-label="Managed CLI tools">
+        {['Claude Code', 'Codex', 'Pi', 'Grok Build'].map((tool) => <span key={tool} className="agent-tool">{tool}</span>)}
+        <span className="agent-scope">MacBook + SSH hosts</span>
+      </div>
+
+      {confirmUpdate ? (
+        <div className="agent-confirm">
+          <div>
+            <strong>Update every detected tool?</strong>
+            <p>This runs the script’s native, Homebrew, npm or tool-specific updater on MacBook and its SSH hosts.</p>
+          </div>
+          <div className="agent-actions">
+            <button className="btn ghost" onClick={() => setConfirmUpdate(false)}>Cancel</button>
+            <button className="btn danger" onClick={() => startRun(false)} disabled={starting || running}>
+              {starting ? 'Starting…' : 'Confirm fleet update'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="agent-actions">
+          <button className="btn ghost" onClick={() => startRun(true)} disabled={starting || running || !macbook?.online}>
+            {running && run?.dry_run && <span className="spinner" />}
+            Preview scan
+          </button>
+          <button className="btn" onClick={() => setConfirmUpdate(true)} disabled={starting || running || !macbook?.online}>
+            {running && !run?.dry_run && <span className="spinner" />}
+            Update toolchain
+          </button>
+        </div>
+      )}
+
+      {!macbook?.online && <div className="agent-hint">MacBook must be reachable; collect the fleet first.</div>}
+      {error && <div className="agent-error">{error}</div>}
+      {run?.error && <div className="agent-error">{run.error}</div>}
+      {running && <div className="agent-running-note">The sweep can take several minutes. Updates run in parallel across SSH hosts.</div>}
+      {run?.finished_at && (
+        <div className="agent-run-meta">
+          {run.dry_run ? 'Preview' : 'Update run'} · finished {relTime(run.finished_at)}
+          {run.exit_code !== undefined && ` · exit ${run.exit_code}`}
+        </div>
+      )}
+      {(run?.output || run?.error_output) && (
+        <pre className="agent-output" aria-live="polite">{[run.output, run.error_output].filter(Boolean).join('\n')}</pre>
+      )}
+    </section>
+  )
+}
+
 function App() {
   const [nodes, setNodes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -701,6 +816,8 @@ function App() {
         {!loading && (
           <NodeTable nodes={nodes} onSelect={(n) => setSelected({ name: n.name })} />
         )}
+
+        {!loading && <AgentUpdatePanel nodes={nodes} />}
 
         {error && <div className="error-banner">{error}</div>}
         {toast && <div className="error-banner" style={{ borderColor: toast.type === 'error' ? 'var(--danger)' : 'var(--ok)' }}>{toast.msg}</div>}

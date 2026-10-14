@@ -42,3 +42,12 @@ python -m app.main
 ```
 
 The API will be available at `http://localhost:8000`.
+
+## Agent toolchain updates
+
+The dashboard's **Agent toolchain** panel previews or runs the repository's
+`backend/scripts/fleet-agent-update.sh` on the configured `macbook` node. The
+script runs locally on that Mac and uses its `~/.ssh/config` and SSH keys to
+reach the hosts it manages. It checks Claude Code, Codex, Pi and Grok Build;
+preview mode makes no changes. A confirmed update invokes each tool's
+installation-specific updater and can take several minutes.

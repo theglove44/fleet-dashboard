@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import paramiko
 import yaml
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,6 +69,10 @@ _collection_state: dict[str, Any] = {"status": "idle", "run_id": None, "started_
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+class AgentUpdateRequest(BaseModel):
+    dry_run: bool = False
 
 
 class NodeConfig(BaseModel):
@@ -192,6 +197,83 @@ async def collect_all() -> dict[str, Any]:
 
     asyncio.create_task(_run())
     return {**_collection_state, "collecting": True}
+
+
+_agent_update_state: dict[str, Any] = {
+    "status": "idle", "run_id": None, "dry_run": None,
+    "started_at": None, "finished_at": None,
+}
+
+
+def _run_agent_update(dry_run: bool) -> dict[str, Any]:
+    """Run the version-controlled fleet agent script from the MacBook."""
+    node = next((n for n in load_config() if n.name == "macbook"), None)
+    if node is None:
+        raise RuntimeError("No 'macbook' node is configured")
+
+    script_path = Path(__file__).resolve().parent.parent / "scripts" / "fleet-agent-update.sh"
+    script = script_path.read_text()
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        client.connect(
+            hostname=node.host,
+            username=node.user,
+            port=node.port,
+            timeout=15,
+            look_for_keys=True,
+            allow_agent=True,
+        )
+        command = "bash -s -- --dry-run" if dry_run else "bash -s"
+        stdin, stdout, stderr = client.exec_command(command, timeout=900)
+        stdin.write(script)
+        stdin.channel.shutdown_write()
+        out = stdout.read().decode("utf-8", errors="replace")
+        err = stderr.read().decode("utf-8", errors="replace")
+        return {"exit_code": stdout.channel.recv_exit_status(), "output": out, "error_output": err}
+    finally:
+        client.close()
+
+
+@app.get("/api/agent-updater/status")
+async def get_agent_update_status() -> dict[str, Any]:
+    """Return the last agent tool scan/update result."""
+    return dict(_agent_update_state)
+
+
+@app.post("/api/agent-updater/run")
+async def start_agent_update(request: AgentUpdateRequest) -> dict[str, Any]:
+    """Run the MacBook fleet agent script asynchronously."""
+    global _agent_update_state
+    if _agent_update_state["status"] == "running":
+        return dict(_agent_update_state)
+
+    run_id = str(uuid.uuid4())
+    _agent_update_state = {
+        "status": "running", "run_id": run_id, "dry_run": request.dry_run,
+        "started_at": _utc_now(), "finished_at": None,
+    }
+
+    async def _run() -> None:
+        global _agent_update_state
+        try:
+            result = await asyncio.get_running_loop().run_in_executor(
+                None, _run_agent_update, request.dry_run
+            )
+            _agent_update_state = {
+                **_agent_update_state,
+                **result,
+                "status": "complete" if result["exit_code"] == 0 else "failed",
+                "finished_at": _utc_now(),
+            }
+        except Exception as e:  # noqa: BLE001
+            _agent_update_state = {
+                **_agent_update_state, "status": "failed", "error": str(e),
+                "finished_at": _utc_now(),
+            }
+
+    asyncio.create_task(_run())
+    return dict(_agent_update_state)
 
 
 @app.get("/health")
