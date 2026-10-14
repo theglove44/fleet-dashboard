@@ -283,7 +283,13 @@ function NodeDetail({ node, intent, onClose, onNodes }) {
     try {
       const res = await fetch(`/api/updates/${encodeURIComponent(node.name)}?t=${Date.now()}`)
       const body = await res.json()
-      setConfirmPkgs({ packages: body.packages || [], error: !body.success ? body.error : null })
+      if (res.ok && body.success) {
+        const count = body.pending_updates ?? (body.packages || []).length
+        onNodes((current) => current.map((n) => n.name === node.name
+          ? { ...n, pending_updates: count, updates_checked_at: body.updates_checked_at }
+          : n))
+      }
+      setConfirmPkgs({ packages: body.packages || [], error: !res.ok || !body.success ? (body.error || `HTTP ${res.status}`) : null })
     } catch (e) {
       setConfirmPkgs({ packages: [], error: e.message || 'Could not fetch package list' })
     }

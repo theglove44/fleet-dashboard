@@ -61,12 +61,19 @@ class SSHCollector:
         self.port = port
         self.timeout = timeout
 
-    def _run(self, client: paramiko.SSHClient, command: str) -> str:
-        """Run a command and return stdout, stripped."""
-        stdin, stdout, stderr = client.exec_command(command, timeout=self.timeout)
+    def _exec(
+        self, client: paramiko.SSHClient, command: str, timeout: int | None = None
+    ) -> tuple[str, str, int]:
+        """Run a command and return its stdout, stderr, and exit status."""
+        stdin, stdout, stderr = client.exec_command(command, timeout=timeout or self.timeout)
         stdin.channel.shutdown_write()
-        out = stdout.read().decode().strip()
-        err = stderr.read().decode().strip()
+        out = stdout.read().decode(errors="replace").strip()
+        err = stderr.read().decode(errors="replace").strip()
+        return out, err, stdout.channel.recv_exit_status()
+
+    def _run(self, client: paramiko.SSHClient, command: str, timeout: int | None = None) -> str:
+        """Run a command and return stdout, or stderr when stdout is empty."""
+        out, err, _ = self._exec(client, command, timeout)
         return out or err
 
     def collect(self) -> NodeFacts:
@@ -170,7 +177,13 @@ class SSHCollector:
                     'export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; brew outdated 2>/dev/null',
                 )
                 return [line.split()[0] for line in out.splitlines() if line.strip()]
-            self._run(client, "sudo apt-get update -qq >/dev/null 2>&1 || true")
+            sudo = "" if self.user == "root" else "sudo -n "
+            _, update_error, update_code = self._exec(
+                client, f"{sudo}apt-get update -qq", timeout=120
+            )
+            if update_code != 0:
+                detail = update_error or f"apt-get update exited with status {update_code}"
+                raise RuntimeError(f"Could not refresh apt package lists: {detail}")
             out = self._run(client, "apt list --upgradable 2>/dev/null | tail -n +2")
             return [line.split("/")[0] for line in out.splitlines() if line.strip()]
         finally:

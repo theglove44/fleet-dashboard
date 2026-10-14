@@ -210,7 +210,19 @@ async def get_upgradable(node_name: str) -> dict[str, Any]:
         packages = await asyncio.get_event_loop().run_in_executor(
             None, collector.upgradable_packages
         )
-        return {"success": True, "packages": packages}
+        checked_at = _utc_now()
+        _cache[node.name] = {
+            **_cache.get(node.name, {}),
+            "pending_updates": len(packages),
+            "updates_checked_at": checked_at,
+        }
+        _save_cache(_cache)
+        return {
+            "success": True,
+            "packages": packages,
+            "pending_updates": len(packages),
+            "updates_checked_at": checked_at,
+        }
     except Exception as e:  # noqa: BLE001
         return {"success": False, "error": str(e), "packages": []}
 
