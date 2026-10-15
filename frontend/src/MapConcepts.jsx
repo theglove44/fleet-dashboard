@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  HEART_NAMES, MESH, REMOTE_NODES, STATUS_COLOR, nodeStatus, orbRadius,
+  HEART_NAMES, MESH, REMOTE_NODES, orbRadius,
 } from './layout'
 
 const VIEW = { width: 100, height: 100 }
@@ -11,9 +11,17 @@ function satellitesOf(nodes) {
   return nodes.filter((node) => !HEART_NAMES.has(node.name))
 }
 
+function roleColor(node) {
+  if (REMOTE_NODES.has(node.name)) return COLORS.remote
+  if (node.group === 'proxmox') return COLORS.proxmox
+  if (node.group === 'vm') return COLORS.vm
+  if (node.os_type === 'macos') return COLORS.mac
+  return COLORS.host
+}
+
 function NodeMark({ node, point, hub = false }) {
   const r = hub ? 4.6 : orbRadius(node) * 0.58
-  const color = hub ? COLORS.remote : STATUS_COLOR[nodeStatus(node)]
+  const color = hub ? COLORS.remote : roleColor(node)
   return (
     <g transform={`translate(${point.x},${point.y})`}>
       {hub ? <circle r={r + 2.2} fill="none" stroke={color} strokeWidth="0.45" strokeDasharray="1.5 1.4" /> : null}
@@ -57,6 +65,14 @@ function WheelMock({ nodes }) {
       <Hub node={hub} point={HUB} />
     </svg>
   )
+}
+
+function RoleLegend() {
+  const legend = [
+    ['Proxmox', COLORS.proxmox], ['VM', COLORS.vm], ['Host', COLORS.host],
+    ['macOS', COLORS.mac], ['Remote', COLORS.remote],
+  ]
+  return <div className="concept-legend">{legend.map(([label, color]) => <span key={label}><i style={label === 'Remote' ? { border: `1px dashed ${color}` } : { background: color }} />{label}</span>)}</div>
 }
 
 function ClusterMock({ nodes }) {
@@ -117,7 +133,7 @@ function RailMock({ nodes }) {
 }
 
 const OPTIONS = [
-  { key: 'wheel', title: '01 · Balanced orbit', pitch: 'Every satellite gets an equal place around the HEART.', detail: 'Most faithful to the current map. The wheel stays symmetric; ten evenly spaced labels may feel dense.' },
+  { key: 'wheel', title: '01 · Role-coloured orbit', pitch: 'Option 1’s balanced wheel, with option 2’s role colours.', detail: 'Color identifies device role; the dashed gold ring calls out the remote node. A compact legend sits above the map.' },
   { key: 'clusters', title: '02 · Role clusters', pitch: 'Group machines by Proxmox, VMs, macOS and hosts.', detail: 'Best for scanning by role. The remote node shares the host cluster but keeps its dashed remote marker.' },
   { key: 'rail', title: '03 · Remote rail', pitch: 'Keep the local mesh circular; give remote nodes a named lane.', detail: 'Clearest when remote sites grow. Uses a little less room for the local wheel, but isolates out-of-mesh devices.' },
 ]
@@ -146,6 +162,7 @@ export default function MapConcepts() {
           return <article className="concept-card" key={option.key}>
             <div className="concept-card-head"><span className="concept-number">{option.key === 'clusters' ? 'RECOMMENDED' : 'OPTION'}</span><h2>{option.title}</h2></div>
             <p className="concept-pitch">{option.pitch}</p>
+            {option.key === 'wheel' && <RoleLegend />}
             <div className="concept-canvas"><Map nodes={nodes} /></div>
             <p className="concept-detail">{option.detail}</p>
           </article>
