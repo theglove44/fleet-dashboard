@@ -792,6 +792,46 @@ body {
   color: var(--text-2); font: 11px/1.65 var(--font-mono); white-space: pre;
 }
 
+/* ---- Map layout design study ---- */
+.concept-page { width: min(1400px, calc(100% - 48px)); margin: 0 auto; padding: 40px 0 56px; }
+.concept-page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.concept-page-head h1 { margin-top: 5px; font-size: 30px; line-height: 1.2; }
+.concept-page-head p { margin-top: 8px; color: var(--text-3); font-size: 13px; }
+.concept-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.concept-card { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--bg-1); box-shadow: 0 16px 36px rgba(0, 0, 0, .14); }
+.concept-card-head { display: flex; flex-direction: column; gap: 5px; }
+.concept-number { color: var(--accent); font: 9px var(--font-mono); letter-spacing: .12em; }
+.concept-card h2 { font-size: 17px; font-weight: 600; }
+.concept-pitch { min-height: 40px; margin-top: 6px; color: var(--text-2); font-size: 11px; }
+.concept-canvas { margin-top: 12px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: #090d16; }
+.concept-map { display: block; width: 100%; height: auto; aspect-ratio: 1; overflow: visible; }
+.concept-orbit { fill: none; stroke: rgba(125, 145, 180, .22); stroke-width: .45; stroke-dasharray: 1.1 1.8; }
+.concept-spoke { stroke: rgba(112, 132, 166, .38); stroke-width: .34; }
+.concept-mesh { stroke: rgba(98, 118, 151, .24); stroke-width: .28; }
+.concept-cluster-link { stroke: rgba(128, 145, 174, .28); stroke-width: .3; }
+.concept-remote-link { stroke: rgba(240, 180, 41, .7); stroke-width: .55; stroke-dasharray: 1.5 1.3; }
+.concept-rail { fill: rgba(240, 180, 41, .035); stroke: rgba(240, 180, 41, .4); stroke-width: .5; stroke-dasharray: 1.4 1.4; }
+.concept-node-label { fill: #c6cfde; font: 2.45px var(--font-mono); paint-order: stroke; stroke: #090d16; stroke-width: .75px; stroke-linejoin: round; }
+.concept-hub-label { fill: #f0c76b; font: 2.3px var(--font-mono); paint-order: stroke; stroke: #090d16; stroke-width: .8px; }
+.concept-group-label { font: 2.7px var(--font-mono); letter-spacing: .08em; }
+.concept-detail { min-height: 46px; margin-top: 12px; color: var(--text-3); font-size: 11px; line-height: 1.6; }
+.concept-foot { margin-top: 18px; color: var(--text-3); font: 10px var(--font-mono); text-align: center; }
+@media (max-width: 1000px) {
+  .concept-grid { grid-template-columns: 1fr; }
+  .concept-card { display: grid; grid-template-columns: 1fr 1.2fr; column-gap: 16px; }
+  .concept-card-head, .concept-pitch, .concept-detail { grid-column: 1; }
+  .concept-canvas { grid-column: 2; grid-row: 1 / span 3; margin-top: 0; }
+  .concept-pitch, .concept-detail { min-height: 0; }
+}
+@media (max-width: 640px) {
+  .concept-page { width: calc(100% - 28px); padding: 22px 0 36px; }
+  .concept-page-head { align-items: flex-start; flex-direction: column; }
+  .concept-page-head h1 { font-size: 25px; }
+  .concept-card { display: block; padding: 13px; }
+  .concept-canvas { margin-top: 12px; }
+  .concept-detail { min-height: 0; }
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 640px) {
   .content { padding: var(--sp-4) var(--sp-4) var(--sp-7); }
