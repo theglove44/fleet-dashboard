@@ -55,7 +55,11 @@ export const STATUS_SHORT = { ok: 'Online', warn: 'Updates', offline: 'Offline',
 
 export function nodePos(name, names) {
   if (HEART_NAMES.has(name)) return HEART_POS
-  const satellites = names.filter((n) => !HEART_NAMES.has(n))
+  const meshOrder = [...new Set(MESH.flat())].filter((n) => names.includes(n))
+  const satellites = [
+    ...meshOrder,
+    ...names.filter((n) => !HEART_NAMES.has(n) && !meshOrder.includes(n)),
+  ]
   const i = satellites.indexOf(name)
   const count = Math.max(satellites.length, 1)
   const angle = (2 * Math.PI * i) / count - Math.PI / 2

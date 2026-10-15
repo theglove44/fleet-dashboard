@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  HEART_NAMES, MESH, REMOTE_NODES, orbRadius,
+  HEART_NAMES, MESH, REMOTE_NODES, nodePos, orbRadius,
 } from './layout'
 
 const VIEW = { width: 100, height: 100 }
@@ -50,12 +50,10 @@ function WheelMock({ nodes }) {
   const hub = nodes.find((n) => HEART_NAMES.has(n.name))
   const points = useMemo(() => {
     const map = {}
-    satellites.forEach((node, i) => {
-      const angle = -Math.PI / 2 + (2 * Math.PI * i) / Math.max(satellites.length, 1)
-      map[node.name] = { x: 50 + 32 * Math.cos(angle), y: 50 + 32 * Math.sin(angle) }
-    })
+    const names = nodes.map((node) => node.name)
+    satellites.forEach((node) => { map[node.name] = nodePos(node.name, names) })
     return map
-  }, [satellites])
+  }, [nodes, satellites])
   return (
     <svg viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} className="concept-map" role="img" aria-label="All fleet nodes distributed evenly around the central hub">
       <circle cx="50" cy="50" r="32" className="concept-orbit" />
@@ -109,7 +107,11 @@ function ClusterMock({ nodes }) {
 function RailMock({ nodes }) {
   const satellites = satellitesOf(nodes)
   const remote = satellites.filter((n) => REMOTE_NODES.has(n.name))
-  const local = satellites.filter((n) => !REMOTE_NODES.has(n.name))
+  const meshOrder = [...new Set(MESH.flat())].filter((name) => satellites.some((node) => node.name === name))
+  const local = [
+    ...meshOrder.map((name) => satellites.find((node) => node.name === name)),
+    ...satellites.filter((node) => !REMOTE_NODES.has(node.name) && !meshOrder.includes(node.name)),
+  ]
   const hub = nodes.find((n) => HEART_NAMES.has(n.name))
   const center = { x: 34, y: 50 }
   const points = {}
