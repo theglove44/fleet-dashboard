@@ -215,6 +215,22 @@ body {
   100% { transform: scale(2.4); opacity: 0; }
 }
 
+.orbit-legend {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 7px 14px;
+  padding: 8px 10px; margin-bottom: 10px; border: 1px solid var(--border);
+  border-radius: 8px; background: rgba(255, 255, 255, 0.018);
+  font: 10px var(--font-mono); color: var(--text-2);
+}
+.orbit-legend > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.role-swatch { width: 8px; height: 8px; display: inline-block; border-radius: 50%; }
+.role-swatch.proxmox { background: #f0a45d; }
+.role-swatch.vm { background: #69a8ff; }
+.role-swatch.host { background: #54d6d0; }
+.role-swatch.mac { background: #bb91ff; }
+.role-swatch.remote { border: 1px dashed #f0b429; background: transparent; }
+.orbit-legend .legend-note { color: var(--text-3); font-size: 9px; }
+.mesh-swatch { display: inline-block; width: 13px; border-top: 1px solid #64748b; }
+
 /* ---- Error / toast ---- */
 .error-banner {
   background: rgba(248, 81, 73, 0.1);

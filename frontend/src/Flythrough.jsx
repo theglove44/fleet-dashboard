@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js'
-import { LAYOUT, MESH, HEART_POS, STATUS_COLOR, nodeStatus, nodePos, osLabel } from './layout'
+import { MESH, HEART_POS, STATUS_COLOR, nodeStatus, nodePos, osLabel } from './layout'
 
 // ---- Fleet fsn: a Jurassic-Park-style File System Navigator for your tailnet ----
 // Each node is a translucent glass box floating over a wireframe canyon; its

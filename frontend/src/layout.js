@@ -34,26 +34,9 @@ export function orbRadius(node) {
 // Nodes reached off-LAN (outside the peer mesh); dashed ring marks that route.
 export const REMOTE_NODES = new Set(['central-brain'])
 
-// Hand-placed sky coords (0-100), keys must match config.yaml names.
-// fleet-manager (the dashboard VM) sits ON the HEART. The main nodes form a
-// 9-node ring in MESH order so peer edges hug the rim with no crossings;
-// the remote central-brain node sits on the lower spoke, inside the map bounds.
-export const HEART_POS = { x: 50, y: 48 }
-export const LAYOUT = {
-  'fleet-manager': { x: 50, y: 48 },
-  'stormbreaker':  { x: 50, y: 13 },
-  'macbook':       { x: 73, y: 21 },
-  'mediaserver':   { x: 85, y: 42 },
-  'proxmox-zen':   { x: 81, y: 66 },
-  'proxmox-lan':   { x: 62, y: 81 },
-  'tuckinandtalk': { x: 38, y: 81 },
-  'openclaw-1':    { x: 19, y: 66 },
-  'loki':          { x: 15, y: 42 },
-  'mini-ubuntu':   { x: 27, y: 21 },
-
-  // Remote site on the lower spoke; keep its label comfortably inside the viewBox.
-  'central-brain': { x: 50, y: 76 },
-}
+// The HEART stays centered; all configured satellites are evenly spaced on
+// one orbit so adding nodes never creates a special-case outlier.
+export const HEART_POS = { x: 50, y: 50 }
 export const MESH = [
   ['stormbreaker', 'macbook'],
   ['macbook', 'mediaserver'],
@@ -71,10 +54,11 @@ export const STATUS_LABEL = { ok: 'Online', warn: 'Updates pending', offline: 'O
 export const STATUS_SHORT = { ok: 'Online', warn: 'Updates', offline: 'Offline', stale: 'Stale' }
 
 export function nodePos(name, names) {
-  if (LAYOUT[name]) return LAYOUT[name]
-  const unknown = names.filter((n) => !LAYOUT[n])
-  const i = unknown.indexOf(name)
-  const n = Math.max(unknown.length, 1)
-  const angle = (2 * Math.PI * i) / n - Math.PI / 2
-  return { x: 50 + 38 * Math.cos(angle), y: 50 + 34 * Math.sin(angle) }
+  if (HEART_NAMES.has(name)) return HEART_POS
+  const satellites = names.filter((n) => !HEART_NAMES.has(n))
+  const i = satellites.indexOf(name)
+  const count = Math.max(satellites.length, 1)
+  const angle = (2 * Math.PI * i) / count - Math.PI / 2
+  const radius = 32
+  return { x: HEART_POS.x + radius * Math.cos(angle), y: HEART_POS.y + radius * Math.sin(angle) }
 }

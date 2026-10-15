@@ -2,22 +2,26 @@ import React, { useEffect, useState, useCallback, useMemo, useRef, lazy, Suspens
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import {
-  HEART_NAMES, HEART_POS, LAYOUT, MESH, REMOTE_NODES,
-  STATUS_COLOR, STATUS_LABEL, STATUS_SHORT,
+  HEART_NAMES, HEART_POS, MESH, REMOTE_NODES,
+  STATUS_LABEL, STATUS_SHORT,
   nodeStatus, typeLabel, orbRadius, nodePos, osLabel,
 } from './layout'
 
 const Flythrough = lazy(() => import('./Flythrough'))
 
+function roleColor(node) {
+  if (REMOTE_NODES.has(node.name)) return '#f0b429'
+  if (node.group === 'proxmox') return '#f0a45d'
+  if (node.group === 'vm') return '#69a8ff'
+  if (node.os_type === 'macos') return '#bb91ff'
+  return '#54d6d0'
+}
+
 function Constellation({ nodes, onSelect }) {
   const [hover, setHover] = useState(null)
   const names = useMemo(() => nodes.map((n) => n.name), [nodes])
   const posOf = useCallback((name) => nodePos(name, names), [names])
-  const statusMap = useMemo(() => {
-    const m = {}
-    nodes.forEach((n) => { m[n.name] = nodeStatus(n) })
-    return m
-  }, [nodes])
+  const heartNode = nodes.find((n) => HEART_NAMES.has(n.name))
 
   const spokeLines = names.map((name) => {
     if (HEART_NAMES.has(name)) return null
@@ -41,13 +45,11 @@ function Constellation({ nodes, onSelect }) {
     )
   })
 
-  const orbs = nodes.map((node) => {
+  const orbs = nodes.filter((node) => !HEART_NAMES.has(node.name)).map((node) => {
     const pos = posOf(node.name)
-    const status = statusMap[node.name]
-    const isHeart = HEART_NAMES.has(node.name)
-    const r = orbRadius(node)
+    const r = orbRadius(node) * 0.58
     const isHover = hover === node.name
-    const color = STATUS_COLOR[status]
+    const color = roleColor(node)
 
     return (
       <g key={node.name}
@@ -57,10 +59,9 @@ function Constellation({ nodes, onSelect }) {
         onClick={() => onSelect(node)}
         style={{ cursor: 'pointer' }}
       >
-        <circle r={r} fill={color} opacity={status === 'offline' ? 0.3 : 0.9} />
-        {isHeart && <circle r={r + 3} fill="none" stroke={color} strokeWidth="0.5" strokeDasharray="1.5 1.5" />}
-        {REMOTE_NODES.has(node.name) && <circle r={r + 2.4} fill="none" stroke={color} strokeWidth="0.4" strokeDasharray="1.2 1.4" opacity="0.8" />}
-        <text y={r + 6} textAnchor="middle" fontSize="2.4" fill={isHover ? '#e8ecf4' : '#7c8698'} fontFamily="monospace">
+        <circle r={r} fill={color} opacity={node.online === false ? 0.35 : 0.92} />
+        {REMOTE_NODES.has(node.name) && <circle r={r + 2.1} fill="none" stroke="#f0b429" strokeWidth="0.5" strokeDasharray="1.3 1.2" />}
+        <text y={5.4} textAnchor="middle" fontSize="2.45" fill={isHover ? '#e8ecf4' : '#c6cfde'} fontFamily="IBM Plex Mono, monospace" paintOrder="stroke" stroke="#090d16" strokeWidth="0.75" strokeLinejoin="round">
           {node.name}
         </text>
       </g>
@@ -71,11 +72,14 @@ function Constellation({ nodes, onSelect }) {
     <svg viewBox="0 0 100 100" className="constellation" preserveAspectRatio="xMidYMid meet">
       {spokeLines}
       {peerLines}
-      <g className="heart" transform={`translate(${HEART_POS.x}, ${HEART_POS.y})`}>
-        <circle r="2.1" fill="currentColor" />
-        <circle className="heart-ring" r="3.6" fill="none" stroke="currentColor" strokeWidth="0.4" />
-        <circle className="heart-ring delay" r="3.6" fill="none" stroke="currentColor" strokeWidth="0.4" />
-      </g>
+      {heartNode && (
+        <g className="heart" transform={`translate(${HEART_POS.x}, ${HEART_POS.y})`} onClick={() => onSelect(heartNode)} style={{ cursor: 'pointer' }}>
+          <circle r="8.2" fill="rgba(240,180,41,.07)" stroke="rgba(240,180,41,.25)" strokeWidth="0.45" />
+          <circle r="6.8" fill="none" stroke="#f0b429" strokeWidth="0.45" strokeDasharray="1.5 1.4" />
+          <circle r="4.6" fill="#f0b429" />
+          <text y="11" textAnchor="middle" fontSize="2.3" fill="#f0c76b" fontFamily="IBM Plex Mono, monospace">fleet-manager · HEART</text>
+        </g>
+      )}
       {orbs}
     </svg>
   )
@@ -851,23 +855,25 @@ function App() {
 
         <div className="constellation-panel">
           <div className="panel-title-row">
-            <span className="panel-title">Network · size by role · click a node for details</span>
+            <span className="panel-title">Network · role colours · click a node for details</span>
             <button className="btn ghost flyover-btn" onClick={() => setFlyover(true)}>
               ✦ Flyover
             </button>
+          </div>
+          <div className="orbit-legend" aria-label="Map legend">
+            <span><i className="role-swatch proxmox" />Proxmox</span>
+            <span><i className="role-swatch vm" />VMs</span>
+            <span><i className="role-swatch host" />Hosts</span>
+            <span><i className="role-swatch mac" />macOS</span>
+            <span><i className="role-swatch remote" />Remote</span>
+            <span className="legend-note">dim = offline</span>
+            <span className="legend-note"><i className="mesh-swatch" />tailnet links</span>
           </div>
           {loading ? (
             <div className="constellation-loading">Charting the sky…</div>
           ) : (
             <Constellation nodes={nodes} onSelect={(n) => setSelected({ name: n.name })} />
           )}
-          <div className="constellation-legend">
-            <span className="legend-item"><span className="legend-dot ok" /> Online</span>
-            <span className="legend-item"><span className="legend-dot warn" /> Updates</span>
-            <span className="legend-item"><span className="legend-dot offline" /> Offline</span>
-            <span className="legend-item"><span className="legend-dot stale" /> Stale</span>
-            <span className="legend-item"><span className="legend-line">——</span> Tailscale mesh</span>
-          </div>
         </div>
 
         {!loading && (
