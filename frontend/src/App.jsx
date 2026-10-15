@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef, lazy, Suspens
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import {
-  HEART_NAMES, HEART_POS, LAYOUT, MESH,
+  HEART_NAMES, HEART_POS, LAYOUT, MESH, REMOTE_NODES,
   STATUS_COLOR, STATUS_LABEL, STATUS_SHORT,
   nodeStatus, typeLabel, orbRadius, nodePos, osLabel,
 } from './layout'
@@ -59,6 +59,7 @@ function Constellation({ nodes, onSelect }) {
       >
         <circle r={r} fill={color} opacity={status === 'offline' ? 0.3 : 0.9} />
         {isHeart && <circle r={r + 3} fill="none" stroke={color} strokeWidth="0.5" strokeDasharray="1.5 1.5" />}
+        {REMOTE_NODES.has(node.name) && <circle r={r + 2.4} fill="none" stroke={color} strokeWidth="0.4" strokeDasharray="1.2 1.4" opacity="0.8" />}
         <text y={r + 6} textAnchor="middle" fontSize="2.4" fill={isHover ? '#e8ecf4' : '#7c8698'} fontFamily="monospace">
           {node.name}
         </text>

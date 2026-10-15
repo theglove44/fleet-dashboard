@@ -31,9 +31,13 @@ export function orbRadius(node) {
   return 4.2
 }
 
+// Nodes reached off-LAN (outside the peer mesh); dashed ring marks that route.
+export const REMOTE_NODES = new Set(['central-brain'])
+
 // Hand-placed sky coords (0-100), keys must match config.yaml names.
-// fleet-manager (the dashboard VM) sits ON the HEART. The other nodes form a
-// 9-node ring in MESH order so peer edges hug the rim with no crossings.
+// fleet-manager (the dashboard VM) sits ON the HEART. The main nodes form a
+// 9-node ring in MESH order so peer edges hug the rim with no crossings;
+// the remote central-brain node sits on the lower spoke, inside the map bounds.
 export const HEART_POS = { x: 50, y: 48 }
 export const LAYOUT = {
   'fleet-manager': { x: 50, y: 48 },
@@ -46,6 +50,9 @@ export const LAYOUT = {
   'openclaw-1':    { x: 19, y: 66 },
   'loki':          { x: 15, y: 42 },
   'mini-ubuntu':   { x: 27, y: 21 },
+
+  // Remote site on the lower spoke; keep its label comfortably inside the viewBox.
+  'central-brain': { x: 50, y: 76 },
 }
 export const MESH = [
   ['stormbreaker', 'macbook'],
