@@ -565,6 +565,7 @@ function SSHTerminal({ node }) {
 
 const AGENT_TOOL_COLUMNS = [
   ['claude', 'Claude Code'], ['codex', 'Codex'], ['pi', 'Pi'], ['grok', 'Grok Build'],
+  ['t3-code', 'T3 Code · scan only'],
 ]
 
 function agentCellLabel(cell, dryRun) {
@@ -572,6 +573,7 @@ function agentCellLabel(cell, dryRun) {
   if (cell.state === 'behind') return 'Behind fleet'
   if (cell.state === 'fail') return cell.update || 'Update failed'
   if (cell.state === 'skip') return 'No update path'
+  if (cell.state === 'scan') return 'Detected · scan only'
   if (cell.state === 'ok') return 'Updated'
   return dryRun ? 'At fleet version' : 'Already current'
 }
@@ -641,10 +643,11 @@ function AgentUpdatePanel({ nodes }) {
       </div>
       <p className="agent-description">
         Inspect and update Claude Code, Codex, Pi and Grok Build using the version-controlled MacBook fleet script.
+        T3 Code is detected for visibility only and is never updated by this toolchain process.
         It runs locally on MacBook and follows that Mac’s SSH host list.
       </p>
       <div className="agent-tools" aria-label="Managed CLI tools">
-        {['Claude Code', 'Codex', 'Pi', 'Grok Build'].map((tool) => <span key={tool} className="agent-tool">{tool}</span>)}
+        {['Claude Code', 'Codex', 'Pi', 'Grok Build', 'T3 Code · scan only'].map((tool) => <span key={tool} className="agent-tool">{tool}</span>)}
         <span className="agent-scope">MacBook + SSH hosts</span>
       </div>
 
@@ -652,7 +655,7 @@ function AgentUpdatePanel({ nodes }) {
         <div className="agent-confirm">
           <div>
             <strong>Update every detected tool?</strong>
-            <p>This runs the script’s native, Homebrew, npm or tool-specific updater on MacBook and its SSH hosts.</p>
+            <p>This updates Claude Code, Codex, Pi and Grok Build on MacBook and its SSH hosts. T3 Code is scan-only and will not be changed.</p>
           </div>
           <div className="agent-actions">
             <button className="btn ghost" onClick={() => setConfirmUpdate(false)}>Cancel</button>

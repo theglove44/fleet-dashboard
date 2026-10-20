@@ -2,6 +2,7 @@
 # fleet-agent-update.sh
 # Checks this Mac and every host in ~/.ssh/config for:
 #   Claude Code (claude), Codex (codex), Pi (pi), Grok Build (grok)
+#   T3 Code (t3) is scanned for visibility only and is never updated here.
 # Works out how each was installed, runs the matching update, prints a table.
 #
 # Usage:
@@ -90,6 +91,22 @@ ver() {  # first x.y.z style number from --version
   "$1" --version 2>/dev/null | head -n 3 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*' | head -n 1
 }
 
+scan_tool() {  # inventory-only: never updates this tool
+  label="$1"; bin="$2"; fallback_bin="${3:-}"
+  path=$(command -v "$bin" 2>/dev/null)
+  if [ -z "$path" ] && [ -n "$fallback_bin" ] && [ -x "$fallback_bin" ]; then
+    path="$fallback_bin"
+  fi
+  if [ -z "$path" ]; then
+    echo "ROW|$label|no|-|-|-|-"; return
+  fi
+  real=$(resolve "$path")
+  echo "[$label] found at $path -> $real (scan only; never updated by this script)" >&2
+  version=$(ver "$path")
+  [ -n "$version" ] || version="present (version unavailable)"
+  echo "ROW|$label|yes|scan-only|-|SCAN ONLY|$version"
+}
+
 check_tool() {
   label="$1"; bin="$2"
   path=$(command -v "$bin" 2>/dev/null)
@@ -165,6 +182,7 @@ check_tool "claude" claude
 check_tool "codex"  codex
 check_tool "pi"     pi
 check_tool "grok"   grok
+scan_tool "t3-code" t3 "$HOME/.local/bin/t3"
 exit 0
 EOF
 )
@@ -302,6 +320,7 @@ END {
     if (state[h] != "ok") { cell[h, t] = ""; continue }
     s = status[h, t]; v = ver[h, t]
     if (inst[h, t] != "yes")            { cell[h, t] = g_none;    cls[h, t] = "none" }
+    else if (s == "SCAN ONLY")         { cell[h, t] = v " (scan only)"; cls[h, t] = "scan" }
     else if (s ~ /^SKIPPED/)            { cell[h, t] = v " " g_skip; cls[h, t] = "skip"; prob[++np] = h "|" t "|" s }
     else if (s ~ /^FAILED|^TIMED OUT/)  { cell[h, t] = v " " g_fail; cls[h, t] = "fail"; prob[++np] = h "|" t "|" s }
     else if (s ~ /^OK, updated/)        { cell[h, t] = v " " g_ok;   cls[h, t] = "ok";   nupd++ }
@@ -335,6 +354,7 @@ END {
       t = tools[j]; c = cls[h, t]
       col = ""
       if (c == "none") col = D
+      else if (c == "scan") col = CYN
       else if (c == "behind" || c == "skip") col = YEL
       else if (c == "fail") col = RED
       else if (c == "ok") col = GRN

@@ -50,4 +50,5 @@ The dashboard's **Agent toolchain** panel previews or runs the repository's
 script runs locally on that Mac and uses its `~/.ssh/config` and SSH keys to
 reach the hosts it manages. It checks Claude Code, Codex, Pi and Grok Build;
 preview mode makes no changes. A confirmed update invokes each tool's
-installation-specific updater and can take several minutes.
+installation-specific updater and can take several minutes. T3 Code is also
+reported with its version as scan-only; the updater never changes it.
